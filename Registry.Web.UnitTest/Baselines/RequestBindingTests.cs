@@ -106,6 +106,11 @@ public sealed class RequestBindingTests : IDisposable
             """{"path":"dem.tif","lat":45.1,"lon":11.2,"radius":50,"sensitivity":0.5}""");
         yield return new BindingCase("hub-contours", typeof(ContourRequestDto),
             """{"path":"dem.tif","interval":5,"count":null,"baseOffset":0,"minElev":null,"maxElev":null,"simplifyTolerance":0,"bandIndex":1}""");
+        // dataset.js (photo coverage)
+        yield return new BindingCase("hub-coverage", typeof(CoverageRequestDto),
+            """{"geometry":{"type":"Polygon","coordinates":[[[11.0,45.0],[11.1,45.0],[11.1,45.1],[11.0,45.0]]]},"limit":20}""");
+        yield return new BindingCase("hub-coverage-default-limit", typeof(CoverageRequestDto),
+            """{"geometry":{"type":"Point","coordinates":[11.0,45.0]}}""");
         yield return new BindingCase("hub-mask-borders", typeof(MaskBordersRequestDto), """{"path":"ortho.tif","near":15,"white":false,"overwrite":true}""");
         yield return new BindingCase("hub-mask-borders-check", typeof(MaskBordersRequestDto), """{"path":"ortho.tif"}""");
         yield return new BindingCase("hub-stockpile-detect-all", typeof(StockpileBatchDetectionRequestDto),

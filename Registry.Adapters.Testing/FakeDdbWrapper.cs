@@ -394,6 +394,9 @@ public class FakeDdbWrapper : IDdbWrapper
     public virtual DdbCleanupResult Cleanup(string ddbPath) => throw Unsupported();
     public virtual List<RescanResult> RescanIndex(string ddbPath, RescanOptions? options = null) => throw Unsupported();
 
+    public virtual List<CoverageResult> FindCoverage(string ddbPath, string geometryGeoJson, int? limit = null) =>
+        throw Unsupported();
+
     public virtual byte[] GenerateThumbnailEx(string filePath, int size, string? preset = null,
         string? bands = null, string? formula = null, string? bandFilter = null,
         string? colormap = null, string? rescale = null) => throw Unsupported();

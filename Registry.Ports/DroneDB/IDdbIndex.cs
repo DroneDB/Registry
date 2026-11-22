@@ -80,6 +80,14 @@ public interface IDdbIndex
     List<RescanResult> RescanIndex(RescanOptions? options = null);
 
     /// <summary>
+    /// The images whose footprint intersects a geometry, best view first (<see cref="IDdbWrapper.FindCoverage"/>).
+    /// </summary>
+    /// <param name="geometryGeoJson">A GeoJSON Point, LineString or Polygon in EPSG:4326</param>
+    /// <param name="limit">The most images returned, 1 to 100; null for libddb's default (20)</param>
+    /// <exception cref="DdbInvalidArgumentsException">The geometry or the limit is not one libddb accepts.</exception>
+    List<CoverageResult> FindCoverage(string geometryGeoJson, int? limit = null);
+
+    /// <summary>
     /// The data-only STAC Item of <paramref name="path"/>, or the dataset's Collection when it is null
     /// (<see cref="IDdbWrapper.StacData"/>): Registry adds every id, link and href.
     /// </summary>

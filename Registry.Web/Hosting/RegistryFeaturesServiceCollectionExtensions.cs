@@ -191,6 +191,7 @@ public static class RegistryFeaturesServiceCollectionExtensions
         services.AddScoped<IObjectRenderService, ObjectRenderService>();
         services.AddScoped<BuildQueryService>();
         services.AddScoped<RasterAnalysisService>();
+        services.AddScoped<CoverageService>();
         services.AddScoped<RasterProcessingService>();
 
         services.AddScoped<IObjectsManager, ObjectsManager>();

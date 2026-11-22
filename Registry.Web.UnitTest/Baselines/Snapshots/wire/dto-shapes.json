@@ -297,6 +297,22 @@
       "pending": false
     }
   },
+  "Registry.Ports.DroneDB.CoverageResult": {
+    "full": {
+      "path": "Path-text",
+      "score": 1.0,
+      "overlap": 2.5,
+      "pixel": [
+        1E-05
+      ]
+    },
+    "sparse": {
+      "path": null,
+      "score": 0.0,
+      "overlap": 0.0,
+      "pixel": null
+    }
+  },
   "Registry.Ports.DroneDB.DdbCleanupResult": {
     "full": {
       "entries": [
@@ -1467,6 +1483,31 @@
       "bandIndex": 0,
       "nodata": null,
       "formula": null
+    }
+  },
+  "Registry.Web.Models.DTO.CoverageRequestDto": {
+    "full": {
+      "geometry": {
+        "snake_case": 1.5,
+        "whole": 2.0,
+        "count": 3,
+        "List": [
+          1,
+          2.5,
+          "text",
+          true,
+          null
+        ],
+        "nested": {
+          "Pascal": null,
+          "flag": false
+        }
+      },
+      "limit": 42
+    },
+    "sparse": {
+      "geometry": null,
+      "limit": null
     }
   },
   "Registry.Web.Models.DTO.CreateImportRequestDto": {

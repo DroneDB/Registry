@@ -55,6 +55,7 @@ namespace Registry.Web.Utilities;
 [JsonSerializable(typeof(ConfigurationFieldDataDto))]
 [JsonSerializable(typeof(ConfigurationSectionDataDto))]
 [JsonSerializable(typeof(ContourRequestDto))]
+[JsonSerializable(typeof(CoverageRequestDto))]
 [JsonSerializable(typeof(CreateImportRequestDto))]
 [JsonSerializable(typeof(CreateRoleRequestDto))]
 [JsonSerializable(typeof(CreateUserRequest))]

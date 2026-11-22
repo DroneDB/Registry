@@ -33,6 +33,7 @@ GET /orgs/{orgSlug}/ds/{dsSlug}/builds/pending -> none [open] @ ObjectBuildsCont
 POST /orgs/{orgSlug}/ds/{dsSlug}/cad/crs -> none [open] @ CadController.SetCrs
 POST /orgs/{orgSlug}/ds/{dsSlug}/chattr -> none [open] @ DatasetsController.ChangeAttributes
 POST /orgs/{orgSlug}/ds/{dsSlug}/contours -> none [open] @ RasterAnalysisController.GenerateContours
+POST /orgs/{orgSlug}/ds/{dsSlug}/coverage -> none [open] @ CoverageController.FindCoverage
 GET /orgs/{orgSlug}/ds/{dsSlug}/ddb -> none [open] @ ObjectDownloadsController.GetDdb
 GET /orgs/{orgSlug}/ds/{dsSlug}/download -> none [open] @ ObjectDownloadsController.Download
 POST /orgs/{orgSlug}/ds/{dsSlug}/download -> none [open] @ ObjectDownloadsController.DownloadPost

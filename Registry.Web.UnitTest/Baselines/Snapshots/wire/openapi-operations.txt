@@ -149,6 +149,14 @@ POST /orgs/{orgSlug}/ds/{dsSlug}/contours
   400 application/problem+json ProblemDetails
   401 application/problem+json ProblemDetails
   403 application/problem+json ProblemDetails
+POST /orgs/{orgSlug}/ds/{dsSlug}/coverage
+  body application/json CoverageRequestDto
+  200 application/json array<CoverageResult>
+  400 application/problem+json ProblemDetails
+  401 application/problem+json ProblemDetails
+  403 application/problem+json ProblemDetails
+  404 application/problem+json ProblemDetails
+  413 application/problem+json ProblemDetails
 GET /orgs/{orgSlug}/ds/{dsSlug}/ddb
   200
   400 application/problem+json ProblemDetails
@@ -1259,6 +1267,8 @@ schema ConfigurationFieldDataDto { key:string, displayName:string, currentValue:
 schema ConfigurationSectionDataDto { name:string, title:string, description:string, isActive:boolean, fields:array<ConfigurationFieldDataDto> }
 schema ConflictResolutionStrategy {  }
 schema ContourRequestDto { path:string, interval:number(double), count:integer(int32), baseOffset:number(double), minElev:number(double), maxElev:number(double), simplifyTolerance:number(double), bandIndex:integer(int32), nodata:number(double), formula:string }
+schema CoverageRequestDto { geometry:any, limit:integer(int32) }
+schema CoverageResult { path:string, score:number(double), overlap:number(double), pixel:array<number(double)> }
 schema CreateImportRequestDto { sourceType:string, params:map<string>, slug:string, name:string, visibility:Visibility }
 schema CreateRoleRequestDto { roleName:string }
 schema CreateUserRequest { userName:string, password:string, email:string, roles:array<string> }

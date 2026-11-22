@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Runtime.InteropServices;
@@ -238,6 +239,15 @@ public class NativeDdbWrapper : IDdbWrapper
         return NativeCall.Invoke<List<RescanResult>>(nameof(NativeDdb.DDBRescanEx2),
             (out IntPtr output) => NativeDdb.DDBRescanEx2(ddbPath, out output, paths, paths.Length, types, extensions,
                 options.StopOnError));
+    }
+
+    public List<CoverageResult> FindCoverage(string ddbPath, string geometryGeoJson, int? limit = null)
+    {
+        ArgumentNullException.ThrowIfNull(geometryGeoJson);
+        var options = limit is { } n ? string.Create(CultureInfo.InvariantCulture, $"{{\"limit\":{n}}}") : null;
+
+        return NativeCall.Invoke<List<CoverageResult>>(nameof(NativeDdb.DDBFindCoverage),
+            (out IntPtr output) => NativeDdb.DDBFindCoverage(ddbPath, geometryGeoJson, options, out output));
     }
 
     // ---------------------------------------------------------------- build

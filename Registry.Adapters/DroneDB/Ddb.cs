@@ -437,6 +437,12 @@ public class DDB : IDDB
             ex => $"Cannot rescan index in folder '{DatasetFolderPath}'");
     }
 
+    public List<CoverageResult> FindCoverage(string geometryGeoJson, int? limit = null)
+    {
+        return Wrap(() => Wrapper.FindCoverage(DatasetFolderPath, geometryGeoJson, limit),
+            ex => $"Cannot find the coverage of a geometry in folder '{DatasetFolderPath}'");
+    }
+
     public void ClearBuildCache()
     {
         if (Directory.Exists(BuildFolderPath))

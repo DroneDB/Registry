@@ -207,6 +207,15 @@ public interface IDdbWrapper
     /// <param name="options">What to rescan; null rescans every entry and stops on the first error</param>
     /// <returns>List of rescan results for each processed entry</returns>
     public List<RescanResult> RescanIndex(string ddbPath, RescanOptions? options = null);
+
+    /// <summary>
+    /// The images of the index whose footprint intersects a geometry, best view first (<c>DDBFindCoverage</c>, ABI 2.10).
+    /// </summary>
+    /// <param name="ddbPath">Path to the DroneDB database</param>
+    /// <param name="geometryGeoJson">A GeoJSON Point, LineString or Polygon in EPSG:4326</param>
+    /// <param name="limit">The most images returned, 1 to 100; null for libddb's default (20)</param>
+    /// <exception cref="DdbInvalidArgumentsException">The geometry or the limit is not one libddb accepts.</exception>
+    public List<CoverageResult> FindCoverage(string ddbPath, string geometryGeoJson, int? limit = null);
     string ThumbnailMimeType { get; }
 
     /// <summary>

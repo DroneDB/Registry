@@ -335,6 +335,52 @@
       "formula": null
     }
   },
+  "hub-coverage": {
+    "type": "CoverageRequestDto",
+    "input": "{\"geometry\":{\"type\":\"Polygon\",\"coordinates\":[[[11.0,45.0],[11.1,45.0],[11.1,45.1],[11.0,45.0]]]},\"limit\":20}",
+    "outcome": "bound",
+    "model": {
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              11.0,
+              45.0
+            ],
+            [
+              11.1,
+              45.0
+            ],
+            [
+              11.1,
+              45.1
+            ],
+            [
+              11.0,
+              45.0
+            ]
+          ]
+        ]
+      },
+      "limit": 20
+    }
+  },
+  "hub-coverage-default-limit": {
+    "type": "CoverageRequestDto",
+    "input": "{\"geometry\":{\"type\":\"Point\",\"coordinates\":[11.0,45.0]}}",
+    "outcome": "bound",
+    "model": {
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          11.0,
+          45.0
+        ]
+      },
+      "limit": null
+    }
+  },
   "hub-mask-borders": {
     "type": "MaskBordersRequestDto",
     "input": "{\"path\":\"ortho.tif\",\"near\":15,\"white\":false,\"overwrite\":true}",

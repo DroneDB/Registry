@@ -121,16 +121,16 @@ public sealed class FakeDdbWrapperTests
     private static string[] ServedRuntimeFixtures() => [.. RuntimeCalls.Keys];
 
     /// <summary>
-    /// The recorded capabilities (fixtures/capabilities.json) are those of the libddb the Registry runs: ABI 2.9, which
+    /// The recorded capabilities (fixtures/capabilities.json) are those of the libddb the Registry runs: ABI 2.10, which
     /// the startup handshake accepts (major 2, minor at least <see cref="DdbAbi.Minor"/>), with every export Registry
-    /// calls. The fixtures are vendored from the release commit of DroneDB 2.9.0 (update-contract.sh).
+    /// calls. The fixtures are vendored from the commit of DroneDB 2.10.0 that adds DDBFindCoverage (update-contract.sh).
     /// </summary>
     [Test]
     public void TheRecordedCapabilities_HaveTheAbiTheHandshakeRequires()
     {
         var capabilities = new FakeDdbRuntime().Capabilities;
 
-        (capabilities.AbiMajor, capabilities.AbiMinor).ShouldBe((2, 9));
+        (capabilities.AbiMajor, capabilities.AbiMinor).ShouldBe((2, 10));
         capabilities.AbiMajor.ShouldBe(DdbAbi.Major);
         capabilities.AbiMinor.ShouldBeGreaterThanOrEqualTo(DdbAbi.Minor);
         DdbAbi.RequiredSymbols.Where(s => !capabilities.Symbols.Contains(s)).ShouldBeEmpty();

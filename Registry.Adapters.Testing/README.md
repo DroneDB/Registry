@@ -215,3 +215,7 @@ when a file is missing or when an unlisted file is added, so the fixtures change
   `DdbAbi.Minor` 9, the adapter calls `DDBRescanEx2` for every rescan and no longer imports `DDBRescan` and
   `DDBRescanEx`). `capabilities` has `abi.minor` 9 and `DDBRescanEx2` in `symbols`; `Contract/README.md` has the 2.9.0
   entry. No other fixture, schema or vector changed.
+* 2026-11-22: DroneDB `5d4c0bb13eadf948d5ac47a9c1af0cc601177779` (libddb 2.10.0, ABI 2.10, not yet released:
+  `DdbAbi.Minor` 10, the adapter imports `DDBFindCoverage`, the images whose footprint intersects a geometry).
+  `capabilities` has `abi.minor` 10 and `DDBFindCoverage` in `symbols`; `Contract/README.md` has the 2.10.0 entry. No
+  other fixture, schema or vector changed.

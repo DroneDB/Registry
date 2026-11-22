@@ -161,6 +161,14 @@ internal static unsafe partial class NativeDdb
     internal static partial DdbResult DDBRescanEx2(string ddbPath, out IntPtr output, string[] paths, int numPaths,
         string types, string extensions, [MarshalAs(UnmanagedType.U1)] bool stopOnError);
 
+    /// <summary>
+    /// The images whose footprint intersects a GeoJSON geometry (ABI 2.10); <paramref name="optionsJson"/> is null for
+    /// the defaults or <c>{"limit": N}</c>.
+    /// </summary>
+    [LibraryImport(Library, StringMarshalling = StringMarshalling.Utf8)]
+    internal static partial DdbResult DDBFindCoverage(string ddbPath, string geometryJson, string? optionsJson,
+        out IntPtr output);
+
     // ------------------------------------------------------------------ build
 
     [LibraryImport(Library, StringMarshalling = StringMarshalling.Utf8)]

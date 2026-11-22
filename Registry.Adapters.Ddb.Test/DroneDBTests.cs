@@ -1271,6 +1271,57 @@ public class NativeDdbWrapperTests : TestBase
             .Select(r => r.Path).ShouldBe(["dir/b.md"]);
     }
 
+    /// <summary>
+    /// The images that see a place: on two real geotagged photos of one flight, the point under the camera of an image
+    /// finds that image first, with a pixel inside it; a place far from both finds nothing; the limit and the arguments
+    /// libddb refuses (another type of geometry, a limit out of range) are the ones of the port.
+    /// </summary>
+    [Test]
+    public void FindCoverage_GeotaggedImages_AreFoundByThePlaceTheySee()
+    {
+        using var area = new TestArea(nameof(FindCoverage_GeotaggedImages_AreFoundByThePlaceTheySee));
+        using var first = new TempFile(TestFileUrl, BaseTestFolder);
+        using var second = new TempFile(TestData.Url("test-datasets/drone_dataset_brighton_beach/DJI_0024.JPG"), BaseTestFolder);
+        DdbWrapper.Init(area.TestFolder);
+        var ddb = new DDB(area.TestFolder, DdbWrapper);
+        File.Copy(first.FilePath, Path.Join(area.TestFolder, "DJI_0023.JPG"));
+        File.Copy(second.FilePath, Path.Join(area.TestFolder, "DJI_0024.JPG"));
+        DdbWrapper.Add(area.TestFolder,
+            [Path.Join(area.TestFolder, "DJI_0023.JPG"), Path.Join(area.TestFolder, "DJI_0024.JPG")]);
+
+        // The camera position of the first image, from the index
+        var entry = ddb.GetEntry("DJI_0023.JPG").ShouldNotBeNull();
+        var position = entry.PointGeometry.ShouldNotBeNull().GetProperty("geometry").GetProperty("coordinates");
+        var point = $$"""{"type":"Point","coordinates":[{{position[0].GetDouble().ToString(System.Globalization.CultureInfo.InvariantCulture)}},{{position[1].GetDouble().ToString(System.Globalization.CultureInfo.InvariantCulture)}}]}""";
+
+        var found = ddb.FindCoverage(point);
+
+        found.ShouldNotBeEmpty();
+        found[0].Path.ShouldBe("DJI_0023.JPG");
+        found[0].Overlap.ShouldBe(1.0);
+        found.Select(f => f.Score).ShouldBe(found.Select(f => f.Score).Order());
+        found.Select(f => f.Path).ShouldBeUnique();
+        found[0].Pixel.ShouldNotBeNull().Length.ShouldBe(2);
+        var width = entry.Properties!["width"].GetDouble();
+        var height = entry.Properties["height"].GetDouble();
+        found[0].Pixel![0].ShouldBeInRange(0, width);
+        found[0].Pixel![1].ShouldBeInRange(0, height);
+
+        // The limit, through the wrapper too
+        DdbWrapper.FindCoverage(area.TestFolder, point, 1).ShouldHaveSingleItem().Path.ShouldBe("DJI_0023.JPG");
+
+        // Nothing sees the other side of the world
+        ddb.FindCoverage("""{"type":"Point","coordinates":[-120.0,-45.0]}""").ShouldBeEmpty();
+
+        // What libddb refuses is an invalid argument, not a failure
+        Should.Throw<DdbInvalidArgumentsException>(() => ddb.FindCoverage(point, 0));
+        Should.Throw<DdbInvalidArgumentsException>(() => ddb.FindCoverage(point, 101));
+        Should.Throw<DdbInvalidArgumentsException>(() =>
+            ddb.FindCoverage("""{"type":"MultiPoint","coordinates":[[9,45]]}"""));
+        Should.Throw<DdbInvalidArgumentsException>(() => ddb.FindCoverage("""{"type":"Point","coordinates":[9,91]}"""));
+        Should.Throw<DdbInvalidArgumentsException>(() => ddb.FindCoverage("not json"));
+    }
+
     [Test]
     public void RescanIndex_NonexistentPath_Exception()
     {
