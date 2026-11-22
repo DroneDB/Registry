@@ -20,15 +20,17 @@ public sealed class UserDeletion
 {
     private readonly ILoginManager _loginManager;
     private readonly UserManager<User> _userManager;
+    private readonly UserRoles _roles;
     private readonly IOrganizationsManager _organizationsManager;
     private readonly RegistryContext _registryContext;
     private readonly IdentityProviderOptions _identity;
     private readonly ILogger<UserDeletion> _logger;
 
-    public UserDeletion(ILoginManager loginManager, UserManager<User> userManager, IOrganizationsManager organizationsManager, RegistryContext registryContext, IOptions<IdentityProviderOptions> identity, ILogger<UserDeletion> logger)
+    public UserDeletion(ILoginManager loginManager, UserManager<User> userManager, UserRoles roles, IOrganizationsManager organizationsManager, RegistryContext registryContext, IOptions<IdentityProviderOptions> identity, ILogger<UserDeletion> logger)
     {
         _loginManager = loginManager;
         _userManager = userManager;
+        _roles = roles;
         _organizationsManager = organizationsManager;
         _registryContext = registryContext;
         _identity = identity.Value;
@@ -74,8 +76,8 @@ public sealed class UserDeletion
                 "User {UserName} is managed by an external identity provider. " +
                 "Deactivating instead of deleting", userName);
 
-            if (!await _userManager.IsInRoleAsync(user, ApplicationDbContext.DeactivatedRoleName))
-                await _userManager.AddToRoleAsync(user, ApplicationDbContext.DeactivatedRoleName);
+            // The disable of the Users list, with its rules: not your own account, not the last active administrator
+            await _roles.DisableUser(userName);
 
             return new DeleteUserResultDto { UserName = userName, DatasetResults = [] };
         }

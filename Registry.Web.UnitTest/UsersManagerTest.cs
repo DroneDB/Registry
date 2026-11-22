@@ -99,6 +99,8 @@ public class UsersManagerTest : TestBase
             _passwordPolicyValidatorMock.Object,
             new NewUserOrganization(TestSettings.Options<AccountOptions>(_settingsOptions), _organizationsManagerMock.Object),
             NullLogger<UserProvisioning>.Instance);
+        var roles = new UserRoles(_loginManagerMock.Object, _userManagerMock.Object, _roleManagerMock.Object, provisioning,
+            _authManagerMock.Object);
         _usersManager = new UsersManager(
             new UserSessions(_loginManagerMock.Object, _userManagerMock.Object, provisioning,
                 new JwtTokenIssuer(tokens, _userManagerMock.Object, TimeProvider.System), _authManagerMock.Object,
@@ -107,12 +109,11 @@ public class UsersManagerTest : TestBase
                 _appContext, _context, NullLogger<UserAccounts>.Instance),
             new UserPasswords(_loginManagerMock.Object, _userManagerMock.Object, _authManagerMock.Object,
                 _passwordPolicyValidatorMock.Object, NullLogger<UserPasswords>.Instance),
-            new UserRoles(_loginManagerMock.Object, _userManagerMock.Object, _roleManagerMock.Object, provisioning,
-                _authManagerMock.Object),
+            roles,
             new UserDirectory(_userManagerMock.Object, _authManagerMock.Object, _webUtils.Quota,
                 new OrganizationMembershipService(_context, _appContext, new UpperInvariantLookupNormalizer(),
                     NullLogger<OrganizationMembershipService>.Instance), _appContext, _context),
-            new UserDeletion(_loginManagerMock.Object, _userManagerMock.Object, _organizationsManagerMock.Object,
+            new UserDeletion(_loginManagerMock.Object, _userManagerMock.Object, roles, _organizationsManagerMock.Object,
                 _context, identity, _logger),
             new UserPreferences(_authManagerMock.Object, _appContext));
     }

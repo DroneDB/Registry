@@ -13,6 +13,7 @@ using Registry.Web.Exceptions;
 using Registry.Web.Identity;
 using Registry.Web.Identity.Models;
 using Registry.Web.Models.Configuration;
+using Registry.Web.Models.DTO;
 using Registry.Web.Services.Adapters;
 using Registry.Web.Services.Ports;
 using Registry.Web.Services.Users;
@@ -464,6 +465,53 @@ public class UserRolesTests
         ex.Message.ShouldContain("last active administrator");
         (await RolesOf("boss")).ShouldBe([Admin]);
         (await RolesOf("jane")).ShouldBe([Admin, Deactivated]);
+    }
+
+    #endregion
+    #region Delete of a user of an external provider (a deactivation)
+
+    /// <summary>The delete of a user of an external provider: the user is deactivated, not deleted</summary>
+    private Task<DeleteUserResultDto> DeleteExternalUser(string userName)
+    {
+        _login.Setup(l => l.Capabilities).Returns(AuthProviderCapabilities.External);
+        var deletion = new UserDeletion(_login.Object, _users, _roles, new Mock<IOrganizationsManager>().Object, null!,
+            MsOptions.Create(new IdentityProviderOptions { DefaultAdmin = new AdminInfo { UserName = "admin" } }),
+            NullLogger<UserDeletion>.Instance);
+        return deletion.DeleteUser(userName);
+    }
+
+    [Test]
+    public async Task DeleteUser_External_DeactivatesTheUser()
+    {
+        await CreateUser("jane", "editor");
+
+        await DeleteExternalUser("jane");
+
+        (await RolesOf("jane")).ShouldBe([Deactivated, "editor"]);
+    }
+
+    [Test]
+    public async Task DeleteUser_External_YourOwnAccount_Is400()
+    {
+        await CreateUser("jane", Admin);
+        CallerIs("jane");
+
+        var ex = await Should.ThrowAsync<BadRequestException>(() => DeleteExternalUser("jane"));
+
+        ex.Message.ShouldContain("your own account");
+        (await RolesOf("jane")).ShouldBe([Admin]);
+    }
+
+    [Test]
+    public async Task DeleteUser_External_TheLastActiveAdmin_Is400()
+    {
+        await CreateUser("operator");
+        CallerIs("operator");
+
+        var ex = await Should.ThrowAsync<BadRequestException>(() => DeleteExternalUser("boss"));
+
+        ex.Message.ShouldContain("last active administrator");
+        (await RolesOf("boss")).ShouldBe([Admin]);
     }
 
     #endregion
