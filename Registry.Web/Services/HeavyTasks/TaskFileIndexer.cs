@@ -68,7 +68,7 @@ public sealed class TaskFileIndexer
 
         var queued = 0;
         var target = new BuildTarget(files.Ddb, files.Dataset, files.OrgSlug, files.DsSlug);
-        var origin = new BuildOrigin(null, files.ParentJobId);
+        var origin = BuildOrigin.ChildOf(files.ParentJobId);
         foreach (var chunk in indexed.Chunk(ChunkSize))
         {
             ct.ThrowIfCancellationRequested();

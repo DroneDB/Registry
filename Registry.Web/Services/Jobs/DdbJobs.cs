@@ -200,7 +200,7 @@ public class DdbJobs : DdbRetriedJob
     }
 
     /// <summary>
-    /// The build, run in the calling job (the build heavy tool and the rescan tool run it inline):
+    /// The build, run in the calling job (the build heavy tool runs it inline):
     /// a build whose lock another process holds is skipped (the holder does the work); any other
     /// failure is written to the job log tail and rethrown (Hangfire's Failed state, the retry
     /// policy, the failure filters). With <paramref name="progress"/>, the build reports its fraction and phase there

@@ -11,9 +11,9 @@ using Registry.Web.Services.HeavyTasks.Ports;
 namespace Registry.Web.Services.HeavyTasks.Tools;
 
 /// <summary>
-/// Native tool that rescans the dataset index, clears caches and rebuilds the
-/// derivative products. Offloads the blocking full-file scan from the
-/// request thread. Mutates the dataset in place (no downloadable artifact).
+/// Native tool that rescans the dataset index, clears caches and queues the rebuild of the
+/// derivative products as a build task, a child of the rescan (<see cref="RescanExecution"/>). Offloads the blocking
+/// full-file scan from the request thread. Mutates the dataset in place (no downloadable artifact).
 /// With a type or extension filter only the rescanned entries are rebuilt
 /// (see <see cref="RescanRebuild"/>). The rescan locks the dataset until it ends (<see cref="RescanEntriesTool"/>
 /// rescans selected entries without).

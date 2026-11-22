@@ -96,8 +96,8 @@ public class IndexRescanService
 
         _logger.LogInformation(
             "Rescanned {Count} entries ({Filter}) in {Org}/{Ds}: {Unreadable} unreadable, {Built} rebuild(s) queued, {Failed} failed",
-            results.Count, filter, orgSlug, dsSlug, unreadable.Length, rebuilt.Built, rebuilt.Failed);
-        return new DatasetRescanOutcome(results.Count, unreadable.Length, rebuilt.Built, rebuilt.Failed);
+            results.Count, filter, orgSlug, dsSlug, unreadable.Length, rebuilt.Queued, rebuilt.Failed);
+        return new DatasetRescanOutcome(results.Count, unreadable.Length, rebuilt.Queued, rebuilt.Failed);
     }
 
     /// <param name="orgSlug">Organization of the scope, or null for all organizations.</param>

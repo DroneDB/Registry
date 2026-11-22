@@ -16,16 +16,17 @@ namespace Registry.Web.Services.Adapters;
 
 /// <summary>Outcome of <see cref="RescanRebuild.RunAsync"/>.</summary>
 /// <param name="WholeDataset">The whole dataset was rebuilt (unfiltered rescan).</param>
-/// <param name="Built">Rescanned entries rebuilt (filtered rescan).</param>
-/// <param name="Failed">Rescanned entries whose rebuild failed (filtered rescan).</param>
-public sealed record RescanRebuildResult(bool WholeDataset, int Built, int Failed);
+/// <param name="Queued">Rescanned entries whose rebuild was queued (filtered rescan).</param>
+/// <param name="Failed">Rescanned entries whose rebuild could not be queued (filtered rescan).</param>
+public sealed record RescanRebuildResult(bool WholeDataset, int Queued, int Failed);
 
 /// <summary>
-/// What a rescan rebuilds, for every rescan path. An unfiltered rescan re-reads every
-/// entry, so it clears the build cache and rebuilds the dataset. A filtered rescan
-/// rebuilds only the rescanned entries that are buildable: the rest of the dataset keeps
-/// its artifacts. A failed entry rebuild does not stop the others; the artifact
-/// completeness check enqueues it again. The upgrade rescans (<see cref="Initialization.UpgradeRescanStartupTask"/>) rebuild only
+/// What a rescan rebuilds, for every rescan path; the <see cref="IRescanBuildRunner"/> queues the builds, so the rescan
+/// does not wait for them and a build that fails does not fail the rescan. An unfiltered rescan re-reads every
+/// entry, so it clears the build cache and queues the rebuild of the dataset. A filtered rescan
+/// queues the rebuilds of the rescanned entries that are buildable only: the rest of the dataset keeps
+/// its artifacts. An entry whose rebuild cannot be queued does not stop the others; the artifact
+/// completeness check queues it again. The upgrade rescans (<see cref="Initialization.UpgradeRescanStartupTask"/>) rebuild only
 /// the entries whose build key changed (<see cref="RescanResult.BuildKeyChanged"/>, D-020): the rest keep their builds.
 /// </summary>
 public sealed class RescanRebuild
@@ -44,7 +45,7 @@ public sealed class RescanRebuild
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     }
 
-    /// <param name="onProgress">Called with the fraction of the entry rebuilds done (filtered rescan only).</param>
+    /// <param name="onProgress">Called with the fraction of the entry rebuilds queued (filtered rescan only).</param>
     /// <param name="onlyChangedKeys">
     /// Rebuild only the rescanned entries whose build key changed (the rescan of a filtered scope only: an
     /// unfiltered rescan rebuilds the dataset).
@@ -56,10 +57,10 @@ public sealed class RescanRebuild
         var (ddb, orgSlug, dsSlug) = (target.Ddb, target.OrgSlug, target.DsSlug);
         if (filter.IsEmpty)
         {
-            _logger.LogInformation("Clearing build cache and rebuilding {OrgSlug}/{DsSlug}", orgSlug, dsSlug);
+            _logger.LogInformation("Clearing the build cache of {OrgSlug}/{DsSlug} and queuing its rebuild", orgSlug, dsSlug);
             ddb.ClearBuildCache();
             await _caches.InvalidateAllDatasetCachesAsync(orgSlug, dsSlug);
-            await RebuildClearedAsync(target, builds, ct);
+            await QueueClearedRebuildAsync(target, builds);
             return new RescanRebuildResult(true, 0, 0);
         }
 
@@ -67,22 +68,22 @@ public sealed class RescanRebuild
             await _caches.InvalidateAllDatasetCachesAsync(orgSlug, dsSlug);
 
         var entries = BuildableEntries(ddb, onlyChangedKeys ? results.Where(r => r.BuildKeyChanged) : results);
-        _logger.LogInformation("Rebuilding {Count} rescanned entries of {OrgSlug}/{DsSlug}",
+        _logger.LogInformation("Queuing the rebuilds of {Count} rescanned entries of {OrgSlug}/{DsSlug}",
             entries.Count, orgSlug, dsSlug);
 
-        int built = 0, failed = 0;
+        int queued = 0, failed = 0;
         for (var i = 0; i < entries.Count; i++)
         {
             ct.ThrowIfCancellationRequested();
             try
             {
                 await builds.BuildEntry(entries[i]);
-                built++;
+                queued++;
             }
             catch (Exception ex)
             {
                 failed++;
-                _logger.LogWarning(ex, "Rebuild of rescanned entry {Path} of {OrgSlug}/{DsSlug} failed",
+                _logger.LogWarning(ex, "Cannot queue the rebuild of rescanned entry {Path} of {OrgSlug}/{DsSlug}",
                     entries[i].Path, orgSlug, dsSlug);
             }
 
@@ -90,31 +91,31 @@ public sealed class RescanRebuild
         }
 
         await builds.BuildPending();
-        return new RescanRebuildResult(false, built, failed);
+        return new RescanRebuildResult(false, queued, failed);
     }
 
-    // From the clear of the build cache until its rebuild ends, the dataset has no derived files. A rebuild that stops
-    // before (cancelled, failed) queues the builds of the entries as their upload queued them, so the dataset gets them
-    // back without waiting for the completeness check; a deleted dataset gets nothing. The stop itself is the outcome
-    // of the rescan: it goes on to the caller
-    private async Task RebuildClearedAsync(BuildTarget target, IRescanBuildRunner builds, CancellationToken ct)
+    // From the clear of the build cache until its rebuild ends, the dataset has no derived files. When the rebuild of
+    // the dataset cannot be queued, the builds of the entries are queued as their upload queued them, so the dataset
+    // gets them back without waiting for the completeness check; a deleted dataset gets nothing. The failure itself is
+    // the outcome of the rescan: it goes on to the caller
+    private async Task QueueClearedRebuildAsync(BuildTarget target, IRescanBuildRunner builds)
     {
-        var rebuilt = false;
+        var queued = false;
         try
         {
             await builds.BuildDataset();
-            await builds.BuildPending();
-            ct.ThrowIfCancellationRequested();
-            rebuilt = true;
+            queued = true;
         }
         finally
         {
-            if (!rebuilt)
+            if (!queued)
                 await BestEffort.RunAsync(() => QueueEntryBuildsAsync(target),
-                    ex => _logger.LogError(ex, "Cannot queue the builds of {OrgSlug}/{DsSlug} after its rebuild " +
-                                               "stopped: the artifact completeness check queues them", target.OrgSlug,
+                    ex => _logger.LogError(ex, "Cannot queue the builds of {OrgSlug}/{DsSlug} after its rebuild was " +
+                                               "not queued: the artifact completeness check queues them", target.OrgSlug,
                         target.DsSlug), CancellationToken.None);
         }
+
+        await builds.BuildPending();
     }
 
     private async Task QueueEntryBuildsAsync(BuildTarget target)
@@ -128,8 +129,8 @@ public sealed class RescanRebuild
             .Select(e => e.Path)
             .ToArray();
         var queued = await _scheduler.QueueAddedAsync(target, paths, BuildOrigin.Service, CancellationToken.None);
-        _logger.LogWarning("The rebuild of {OrgSlug}/{DsSlug} stopped after its build cache was cleared: {Count} " +
-                           "build(s) queued", target.OrgSlug, target.DsSlug, queued.Count);
+        _logger.LogWarning("The rebuild of {OrgSlug}/{DsSlug} was not queued after its build cache was cleared: " +
+                           "{Count} build(s) queued", target.OrgSlug, target.DsSlug, queued.Count);
     }
 
     private List<RescanResult> BuildableEntries(IDDB ddb, IEnumerable<RescanResult> results)

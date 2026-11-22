@@ -126,7 +126,7 @@ public interface IHeavyToolExecutionContext : IHeavyToolValidationContext
     /// <summary>Queues the builds of what the tool added (as children of the task), in the task's scope.</summary>
     BuildScheduler BuildQueue { get; }
 
-    /// <summary>Runs builds inline, in the task's own job (the build and rescan tools).</summary>
+    /// <summary>Runs builds inline, in the task's own job (the build tool).</summary>
     DdbJobs Builds { get; }
 
     /// <summary>

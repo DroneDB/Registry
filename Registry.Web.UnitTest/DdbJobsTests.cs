@@ -405,28 +405,6 @@ public class DdbJobsTests
 
     // ---- BuildPending: one indexed Build per due pending entry ----
 
-    private sealed record EnqueuedBuild(string Method, string OrgSlug, Guid InternalRef, string Path, bool Force,
-        IndexPayload Meta);
-
-    // Captures every EnqueueIndexed<DdbJobs> call, evaluating the arguments the way Hangfire serializes them
-    private static Mock<IBackgroundJobsProcessor> MockJobs(List<EnqueuedBuild> enqueued)
-    {
-        var jobs = new Mock<IBackgroundJobsProcessor>(MockBehavior.Strict);
-        jobs.Setup(x => x.EnqueueIndexed(It.IsAny<Expression<Action<DdbJobs>>>(), It.IsAny<IndexPayload>()))
-            .Returns<Expression<Action<DdbJobs>>, IndexPayload>((expr, meta) =>
-            {
-                var call = (MethodCallExpression)expr.Body;
-                object? Eval(int i) => Expression.Lambda(call.Arguments[i]).Compile().DynamicInvoke();
-                // Build(org, ref, path, force, context); RebuildInBackground(org, ref, path, context) never forces
-                var hasForce = call.Method.Name == nameof(DdbJobs.Build);
-                enqueued.Add(new EnqueuedBuild(call.Method.Name, (string)Eval(0)!, (Guid)Eval(1)!, (string)Eval(2)!,
-                    hasForce && (bool)Eval(3)!, meta));
-                Eval(call.Arguments.Count - 1).ShouldBeNull(); // PerformContext is injected by Hangfire at run time
-                return $"job-{enqueued.Count}";
-            });
-        return jobs;
-    }
-
     private Mock<IJobIndexQuery> MockJobIndex(params JobIndex[] rows)
     {
         // Real storage states as well as the display rows: dedup consults the authoritative
@@ -468,14 +446,14 @@ public class DdbJobsTests
             PendingEntry("busy.obj", 600, "h-busy"),        // has an active build job
             PendingMarkers.Of("never.obj", "h-never")
         ]);
-        var enqueued = new List<EnqueuedBuild>();
+        var enqueued = new List<QueuedDdbJob>();
         var index = MockJobIndex(
             Row("busy.obj", "Processing"),
             Row("model.obj", "Failed"),                 // terminal: does not block
             Row("sub/model.obj", "Succeeded"),          // terminal: does not block
             Row("never.obj", "Enqueued", "raster-export")); // other tool: does not block
 
-        Pending(MockJobs(enqueued).Object, index.Object).Run(_ddb.Object, Org, Ds, Console());
+        Pending(QueuedDdbJobs.Capture(enqueued).Object, index.Object).Run(_ddb.Object, Org, Ds, Console());
 
         enqueued.Select(e => e.Path).ShouldBe(["model.obj", "sub/model.obj", "never.obj"]);
         // The new job shape: organization and InternalRef, never the DDB object
@@ -513,9 +491,9 @@ public class DdbJobsTests
         ]);
         _ddb.Setup(x => x.GetBuildArtifacts(It.IsAny<IReadOnlyList<string>>()))
             .Returns([Manifest("old/model.obj", true), Manifest("ortho.tif", false)]);
-        var enqueued = new List<EnqueuedBuild>();
+        var enqueued = new List<QueuedDdbJob>();
 
-        Pending(MockJobs(enqueued).Object).Run(_ddb.Object, Org, Ds, Console());
+        Pending(QueuedDdbJobs.Capture(enqueued).Object).Run(_ddb.Object, Org, Ds, Console());
 
         enqueued.Select(e => (e.Method, e.Path)).ShouldBe([
             (nameof(DdbJobs.RebuildInBackground), "old/model.obj"),
@@ -534,9 +512,9 @@ public class DdbJobsTests
         _ddb.Setup(x => x.GetPendingBuildInfo()).Returns([PendingEntry("old/model.obj", 600, "h-old")]);
         _ddb.Setup(x => x.GetBuildArtifacts(It.IsAny<IReadOnlyList<string>>()))
             .Throws(new DdbException("cannot read the index"));
-        var enqueued = new List<EnqueuedBuild>();
+        var enqueued = new List<QueuedDdbJob>();
 
-        Pending(MockJobs(enqueued).Object).Run(_ddb.Object, Org, Ds, Console());
+        Pending(QueuedDdbJobs.Capture(enqueued).Object).Run(_ddb.Object, Org, Ds, Console());
 
         enqueued.Select(e => (e.Method, e.Path)).ShouldBe([(nameof(DdbJobs.Build), "old/model.obj")]);
         _log.Entries.ShouldContain(e => e.Level == LogLevel.Warning &&
@@ -549,10 +527,10 @@ public class DdbJobsTests
         _ddb.Setup(x => x.GetPendingBuildInfo()).Returns([PendingEntry("old/model.obj", 600, "h-old")]);
         _ddb.Setup(x => x.GetBuildArtifacts(It.IsAny<IReadOnlyList<string>>()))
             .Throws(new InvalidOperationException("a bug, not a manifest that cannot be read"));
-        var enqueued = new List<EnqueuedBuild>();
+        var enqueued = new List<QueuedDdbJob>();
 
         Should.Throw<InvalidOperationException>(() =>
-            Pending(MockJobs(enqueued).Object).Run(_ddb.Object, Org, Ds, Console()));
+            Pending(QueuedDdbJobs.Capture(enqueued).Object).Run(_ddb.Object, Org, Ds, Console()));
 
         enqueued.ShouldBeEmpty();
     }
@@ -567,9 +545,9 @@ public class DdbJobsTests
             new PendingBuildInfo { Path = "long.obj", Hash = "h2", LastAttempt = Now - 600, RetryAfter = Now + 1 },
             new PendingBuildInfo { Path = "now.obj", Hash = "h3", LastAttempt = Now - 600, RetryAfter = Now }
         ]);
-        var enqueued = new List<EnqueuedBuild>();
+        var enqueued = new List<QueuedDdbJob>();
 
-        Pending(MockJobs(enqueued).Object).Run(_ddb.Object, Org, Ds, Console());
+        Pending(QueuedDdbJobs.Capture(enqueued).Object).Run(_ddb.Object, Org, Ds, Console());
 
         enqueued.Select(e => e.Path).ShouldBe(["short.obj", "now.obj"]);
         Logged.ShouldContain(m => m.Contains("Pending builds: 3; enqueued 2; skipped 1 (0 awaiting files, 1 not yet due"));
@@ -586,9 +564,9 @@ public class DdbJobsTests
         var waiting = PendingEntry("waiting.obj", 3600, "h-waiting");
         waiting.AwaitingFiles = true;
         _ddb.Setup(x => x.GetPendingBuildInfo()).Returns([waiting, PendingEntry("due.obj", 3600, "h-due")]);
-        var enqueued = new List<EnqueuedBuild>();
+        var enqueued = new List<QueuedDdbJob>();
 
-        Pending(MockJobs(enqueued).Object).Run(_ddb.Object, Org, Ds, Console());
+        Pending(QueuedDdbJobs.Capture(enqueued).Object).Run(_ddb.Object, Org, Ds, Console());
 
         enqueued.Select(e => e.Path).ShouldBe(["due.obj"]);
         Logged.ShouldContain(m => m.Contains(
@@ -599,9 +577,9 @@ public class DdbJobsTests
     public void Pending_DuplicatePendingPath_EnqueuedOnce()
     {
         _ddb.Setup(x => x.GetPendingBuildInfo()).Returns([PendingEntry("a.obj", 120, "h1"), PendingEntry("a.obj", 120, "h1")]);
-        var enqueued = new List<EnqueuedBuild>();
+        var enqueued = new List<QueuedDdbJob>();
 
-        Pending(MockJobs(enqueued).Object).Run(_ddb.Object, Org, Ds, Console());
+        Pending(QueuedDdbJobs.Capture(enqueued).Object).Run(_ddb.Object, Org, Ds, Console());
 
         enqueued.Count.ShouldBe(1);
     }
@@ -610,10 +588,10 @@ public class DdbJobsTests
     public void Pending_NothingDue_EnqueuesNothingAndSkipsJobIndexQuery()
     {
         _ddb.Setup(x => x.GetPendingBuildInfo()).Returns([PendingEntry("a.obj", 10), PendingEntry("", 600)]);
-        var enqueued = new List<EnqueuedBuild>();
+        var enqueued = new List<QueuedDdbJob>();
         var index = MockJobIndex();
 
-        Pending(MockJobs(enqueued).Object, index.Object).Run(_ddb.Object, Org, Ds, Console());
+        Pending(QueuedDdbJobs.Capture(enqueued).Object, index.Object).Run(_ddb.Object, Org, Ds, Console());
 
         enqueued.ShouldBeEmpty();
         index.Verify(x => x.GetLatestJobsByPathAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(),
@@ -631,7 +609,7 @@ public class DdbJobsTests
         var (context, tail) = Context();
 
         Should.Throw<InvalidOperationException>(() =>
-            Pending(MockJobs([]).Object).Run(_ddb.Object, Org, Ds, JobConsole.For(_log, context, Folder)));
+            Pending(QueuedDdbJobs.Capture([]).Object).Run(_ddb.Object, Org, Ds, JobConsole.For(_log, context, Folder)));
 
         var lines = tail.Snapshot().Lines.Select(l => l.Msg).ToList();
         lines.ShouldContain(m => m.Contains("Build pending failed: InvalidOperationException:"));
@@ -646,10 +624,10 @@ public class DdbJobsTests
         _ddb.Setup(x => x.GetPendingBuildInfo()).Returns([
             PendingMarkers.Of("sub/model.obj", "h1")
         ]);
-        var enqueued = new List<EnqueuedBuild>();
+        var enqueued = new List<QueuedDdbJob>();
         var (context, tail) = Context();
 
-        Jobs(MockJobs(enqueued).Object).BuildPending(Org, Ref, context);
+        Jobs(QueuedDdbJobs.Capture(enqueued).Object).BuildPending(Org, Ref, context);
 
         enqueued.Count.ShouldBe(1);
         enqueued[0].Meta.ShouldBe(new IndexPayload(Org, Ds, "h1", MagicStrings.AutoBuildServiceUserId, null,

@@ -14,8 +14,8 @@ using Registry.Web.Services.Ports;
 namespace Registry.Web.Services.HeavyTasks.Tools;
 
 /// <summary>
-/// What every rescan task does, whichever entries it selects: rescan the index, log the summary, rebuild what the
-/// rescan changed (<see cref="RescanRebuild"/>) and report progress. The tools (<see cref="RescanIndexTool"/>,
+/// What every rescan task does, whichever entries it selects: rescan the index, log the summary, queue the rebuilds
+/// of what the rescan changed (<see cref="RescanRebuild"/>) and report progress. The tools (<see cref="RescanIndexTool"/>,
 /// <see cref="RescanEntriesTool"/>) only validate and describe their request, and share the one parameter they have
 /// in common, <c>stopOnError</c>.
 /// <see cref="RescanRebuild"/> is resolved through <see cref="IServiceScopeFactory"/>: it needs the
@@ -44,7 +44,11 @@ public sealed class RescanExecution(IServiceScopeFactory scopeFactory)
             throw new BadRequestException($"The tool '{request.ToolId}' takes no path. {hint}");
     }
 
-    /// <summary>Rescans the entries <paramref name="filter"/> selects, then rebuilds them (or the dataset, for no filter).</summary>
+    /// <summary>
+    /// Rescans the entries <paramref name="filter"/> selects, then queues their rebuilds (or the rebuild of the dataset,
+    /// for no filter) as build tasks of their own, children of this task: the task is the rescan, so a rebuild that
+    /// fails is a failed build, not a failed rescan, and the rescan does not wait for the builds.
+    /// </summary>
     public async Task RunAsync(HeavyToolRequest request, IHeavyToolExecutionContext ctx, RescanFilter filter,
         bool stopOnError, IProgress<HeavyToolProgress> progress, CancellationToken ct)
     {
@@ -56,38 +60,33 @@ public sealed class RescanExecution(IServiceScopeFactory scopeFactory)
 
         var ok = results.Count(r => r.Success);
         var summary = $"{ok}/{results.Count} ok, {results.Count - ok} errors";
-        progress.Report(new HeavyToolProgress(-1, "rebuilding", LogChunk: $"Rescan: {summary}. Rebuilding derivatives"));
+        progress.Report(new HeavyToolProgress(-1, "queuing rebuilds", LogChunk: $"Rescan: {summary}. Queuing the rebuilds"));
 
+        var target = new BuildTarget(ctx.Ddb, ctx.Dataset, request.OrgSlug, request.DsSlug);
         using var scope = scopeFactory.CreateScope();
-        var rebuild = await scope.ServiceProvider.GetRequiredService<RescanRebuild>().RunAsync(
-            new BuildTarget(ctx.Ddb, ctx.Dataset, request.OrgSlug, request.DsSlug), filter, results, new InlineBuilds(ctx),
-            f => progress.Report(new HeavyToolProgress(f, "rebuilding")), ct: ct);
+        var rebuild = await scope.ServiceProvider.GetRequiredService<RescanRebuild>().RunAsync(target, filter, results,
+            new ChildBuilds(ctx.BuildQueue, target, BuildOrigin.ChildOf(ctx.TaskId)),
+            f => progress.Report(new HeavyToolProgress(f, "queuing rebuilds")), ct: ct);
 
-        progress.Report(new HeavyToolProgress(1, "done", LogChunk: rebuild.WholeDataset
-            ? $"Rescan complete: {summary}"
-            : $"Rescan complete: {summary}; rebuilt {rebuild.Built}, {rebuild.Failed} rebuild failures"));
+        progress.Report(new HeavyToolProgress(1, "done", LogChunk: $"Rescan complete: {summary}; {Describe(rebuild)}"));
     }
 
-    // Inline, one build at a time (same approach as BuildTool): this task already holds a
-    // builds-queue worker, so a rescan across many datasets cannot flood the build queue.
-    private sealed class InlineBuilds(IHeavyToolExecutionContext ctx) : IRescanBuildRunner
+    private static string Describe(RescanRebuildResult rebuild)
     {
-        public Task BuildDataset()
-        {
-            ctx.Builds.BuildNow(ctx.Ddb, null, true, ctx.Hangfire);
-            return Task.CompletedTask;
-        }
+        if (rebuild.WholeDataset)
+            return "rebuild of the dataset queued";
+        var queued = rebuild.Queued == 1 ? "1 rebuild queued" : $"{rebuild.Queued} rebuilds queued";
+        return rebuild.Failed == 0 ? queued : $"{queued}, {rebuild.Failed} could not be queued";
+    }
 
-        public Task BuildEntry(RescanResult entry)
-        {
-            ctx.Builds.BuildNow(ctx.Ddb, entry.Path, true, ctx.Hangfire);
-            return Task.CompletedTask;
-        }
+    // Forced builds, queued as the children of the rescan task
+    private sealed class ChildBuilds(BuildScheduler builds, BuildTarget target, BuildOrigin origin) : IRescanBuildRunner
+    {
+        public Task BuildDataset() => builds.QueueDatasetAsync(target, force: true, origin);
 
-        public Task BuildPending()
-        {
-            ctx.Builds.BuildPendingNow(ctx.Ddb, ctx.Hangfire);
-            return Task.CompletedTask;
-        }
+        public Task BuildEntry(RescanResult entry) =>
+            builds.QueueAsync(target, entry.Path, entry.Hash, force: true, origin);
+
+        public Task BuildPending() => builds.RetryPendingAsync(target);
     }
 }

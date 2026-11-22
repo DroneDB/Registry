@@ -14,7 +14,8 @@ namespace Registry.Web.Services.HeavyTasks.Tools;
 
 /// <summary>
 /// Native tool that rescans selected entries of a dataset (files, or folders for the entries under them): it reads
-/// them again and force-rebuilds the buildable ones (<see cref="RescanRebuild"/>, as any filtered rescan does). Unlike
+/// them again and queues forced rebuilds of the buildable ones as build tasks, children of the rescan
+/// (<see cref="RescanRebuild"/>, as any filtered rescan does). Unlike
 /// <see cref="RescanIndexTool"/> it does not lock the dataset (it is not one of
 /// <see cref="Datasets.DatasetActivity.LockingTools"/>): libddb commits each entry on its own, so the rest of the
 /// dataset stays readable and writable while it runs. Mutates the dataset in place (no downloadable artifact).

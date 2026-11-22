@@ -22,6 +22,12 @@ public sealed record BuildOrigin(string? UserId, string? ParentJobId = null)
 {
     /// <summary>The automatic builds Registry starts itself (the completeness sweep).</summary>
     public static BuildOrigin Service { get; } = new(MagicStrings.AutoBuildServiceUserId);
+
+    /// <summary>
+    /// The builds a task queues as its children (what it added or rescanned): the task list folds them under the
+    /// task, and a build that fails is a failed build of its own, not a failure of the task.
+    /// </summary>
+    public static BuildOrigin ChildOf(string taskJobId) => new(null, taskJobId);
 }
 
 /// <summary>A build job queued for an entry.</summary>

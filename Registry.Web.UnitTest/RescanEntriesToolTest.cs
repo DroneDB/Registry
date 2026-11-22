@@ -24,8 +24,9 @@ using Shouldly;
 namespace Registry.Web.Test;
 
 /// <summary>
-/// <c>rescan-entries</c>: a rescan of selected entries that validates its paths at submit, rebuilds only the
-/// rescanned buildable entries and, unlike the rescan of the index, does not lock the dataset.
+/// <c>rescan-entries</c>: a rescan of selected entries that validates its paths at submit, queues the rebuilds of the
+/// rescanned buildable entries only, as build tasks of their own, and, unlike the rescan of the index, does not lock
+/// the dataset.
 /// </summary>
 [TestFixture]
 public class RescanEntriesToolTest
@@ -35,6 +36,8 @@ public class RescanEntriesToolTest
     private Mock<IDDB> _ddb = null!;
     private Mock<IDatasetCacheInvalidator> _cacheInvalidator = null!;
     private Mock<IBackgroundJobsProcessor> _jobs = null!;
+    private List<QueuedDdbJob> _queued = null!;
+    private List<string> _log = null!;
     private TestDb<RegistryContext> _db = null!;
     private RescanEntriesTool _tool = null!;
 
@@ -47,7 +50,9 @@ public class RescanEntriesToolTest
         _ddb.Setup(x => x.GetEntry(It.IsAny<string>())).Returns((string path) =>
             path is "a.tif" or "folder" or "folder/b.dwg" or "folder/notes.txt" ? new Entry { Path = path } : null);
         _cacheInvalidator = new Mock<IDatasetCacheInvalidator>();
-        _jobs = new Mock<IBackgroundJobsProcessor>();
+        _queued = [];
+        _log = [];
+        _jobs = QueuedDdbJobs.Capture(_queued);
         _db = TestDb.Create<RegistryContext>();
         using (var context = _db.NewContext())
         {
@@ -81,8 +86,10 @@ public class RescanEntriesToolTest
 
     private Task<HeavyToolArtifact?> Execute(object prms)
     {
-        var ctx = TestJobs.ExecutionContext(_ddb.Object, internalRef: DatasetRef);
-        return _tool.ExecuteAsync(Request(prms), ctx, new Progress<HeavyToolProgress>(), CancellationToken.None);
+        var ctx = TestJobs.ExecutionContext(_ddb.Object, internalRef: DatasetRef, taskId: "rescan-task", jobs: _jobs.Object);
+        return _tool.ExecuteAsync(Request(prms), ctx,
+            new SyncProgress<HeavyToolProgress>(p => { if (p.LogChunk != null) _log.Add(p.LogChunk); }),
+            CancellationToken.None);
     }
 
     [Test]
@@ -151,13 +158,47 @@ public class RescanEntriesToolTest
     }
 
     /// <summary>
-    /// Only the rescanned entries are rebuilt, and only the buildable ones: the build cache is not cleared and the
-    /// dataset is not rebuilt as a whole, as in any rescan with a filter.
+    /// The rebuilds of the rescanned buildable entries only are queued, forced, as children of the rescan task: the
+    /// rescan builds nothing itself, the build cache is not cleared and the dataset is not rebuilt as a whole, as in
+    /// any rescan with a filter.
     /// </summary>
     [Test]
-    public async Task Execute_RescansThePaths_AndRebuildsOnlyTheRescannedBuildableEntries()
+    public async Task Execute_RescansThePaths_AndQueuesTheRebuildsOfOnlyTheRescannedBuildableEntries()
     {
-        _ddb.Setup(x => x.RescanIndex(It.Is<RescanOptions>(o => o.StopOnError && o.Types == null && o.Extensions == null &&
+        RescanFolderAndFile();
+
+        await Execute(Of(true, "/folder", "a.tif", "folder"));
+
+        _ddb.Verify(x => x.RescanIndex(It.Is<RescanOptions>(o => o.StopOnError)), Times.Once);
+        _queued.Select(j => (j.Method, j.Path, j.Force, j.Meta.ParentJobId)).ShouldBe([
+            ("Build", "folder/b.dwg", true, "rescan-task"),
+            ("Build", "a.tif", true, "rescan-task")
+        ]);
+        _ddb.Verify(x => x.Build(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<bool>()), Times.Never);
+        _ddb.Verify(x => x.ClearBuildCache(), Times.Never);
+        _cacheInvalidator.Verify(x => x.InvalidateAllDatasetCachesAsync("org", "ds"), Times.Once);
+        _log.Last().ShouldBe("Rescan complete: 3/4 ok, 1 errors; 2 rebuilds queued");
+    }
+
+    /// <summary>A rebuild that cannot be queued does not stop the others, and the log says so; the rescan succeeds.</summary>
+    [Test]
+    public async Task Execute_ARebuildThatCannotBeQueued_DoesNotStopTheOthers()
+    {
+        RescanFolderAndFile();
+        _jobs.Setup(x => x.EnqueueIndexed(It.IsAny<System.Linq.Expressions.Expression<Action<Registry.Web.Services.Jobs.DdbJobs>>>(),
+                It.Is<Registry.Web.Models.IndexPayload>(m => m.Path == "folder/b.dwg")))
+            .Throws(new InvalidOperationException("the queue is down"));
+
+        await Execute(Of("folder", "a.tif"));
+
+        _queued.Select(j => j.Path).ShouldBe(["a.tif"]);
+        _log.Last().ShouldBe("Rescan complete: 3/4 ok, 1 errors; 1 rebuild queued, 1 could not be queued");
+    }
+
+    // The rescan of folder and a.tif: folder/b.dwg and a.tif are buildable, folder/notes.txt is not, missing.tif failed
+    private void RescanFolderAndFile()
+    {
+        _ddb.Setup(x => x.RescanIndex(It.Is<RescanOptions>(o => o.Types == null && o.Extensions == null &&
                 o.Paths != null && o.Paths.SequenceEqual(FolderAndFile))))
             .Returns([
                 new RescanResult { Path = "folder/b.dwg", Success = true, Hash = "h1" },
@@ -169,16 +210,6 @@ public class RescanEntriesToolTest
             .Select(p => p != "folder/notes.txt"
                 ? TestBuilds.Build("/data/ds", p, EntryType.Vector, "h-" + p, BuildState.None)
                 : TestBuilds.NotBuildable(p)).ToArray());
-        _ddb.Setup(x => x.Build("a.tif", null, true)).Throws(new InvalidOperationException("cannot build"));
-
-        await Execute(Of(true, "/folder", "a.tif", "folder"));
-
-        _ddb.Verify(x => x.ClearBuildCache(), Times.Never);
-        _ddb.Verify(x => x.Build("folder/b.dwg", null, true), Times.Once);
-        _ddb.Verify(x => x.Build("a.tif", null, true), Times.Once);
-        _ddb.Verify(x => x.Build(It.Is<string>(p => p == "folder/notes.txt" || p == "missing.tif" || p == null),
-            It.IsAny<string>(), It.IsAny<bool>()), Times.Never);
-        _cacheInvalidator.Verify(x => x.InvalidateAllDatasetCachesAsync("org", "ds"), Times.Once);
     }
 
     [Test]
@@ -192,6 +223,7 @@ public class RescanEntriesToolTest
             Times.Once);
         _ddb.Verify(x => x.ClearBuildCache(), Times.Never);
         _ddb.Verify(x => x.Build(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<bool>()), Times.Never);
+        _queued.ShouldBeEmpty();
         _cacheInvalidator.Verify(x => x.InvalidateAllDatasetCachesAsync(It.IsAny<string>(), It.IsAny<string>()), Times.Never);
     }
 }
