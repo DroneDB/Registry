@@ -60,9 +60,11 @@
                    request merge commit for a PR run), e.g. ddb_2.0.0~git1813815_amd64.deb next to
                    ddb-2.0.0-Windows.zip. Remove the property with the move to the release.
 
-        Pinned now (2026-11-18): the DroneDB v2.8.0 release (ABI 2.8; the handshake requires ABI 2.6:
-        DdbAbi.Minor 6, since 2.7 and 2.8 add no export or setting). 2.8.0 builds the COPC of a
-        geographic or geocentric point cloud in a projected CRS (the crs of its build artifact), ignores
+        Pinned now (2026-11-22): the DroneDB v2.8.1 release (ABI 2.8; the handshake requires ABI 2.6:
+        DdbAbi.Minor 6, since 2.7 and 2.8 add no export or setting). 2.8.1 draws a point-cloud map tile
+        zoomed in past the density of the cloud as a surface (ddb-tilers 0.13.4) and builds the 3D Tiles of
+        an OBJ whose statements are indented with a tab, as ODM writes them (Obj2Tiles v1.10.4). 2.8.0
+        builds the COPC of a geographic or geocentric point cloud in a projected CRS (the crs of its build artifact), ignores
         a CRS the coordinates do not fit, and rebuilds once the COPCs and COGs that change (the
         completeness sweep queues them); its gdal-util speaks protocol 1.4. 2.7.2 writes palette and
         masked rasters as 2.6.0 did (their colour table, mask and overviews); 2.7.1 gives the exported and region
@@ -75,9 +77,9 @@
     -->
     <PropertyGroup>
         <DdbSource>release</DdbSource>
-        <DdbVersion>2.8.0</DdbVersion>
-        <DdbDebSha256>e4bc0f96eee78bc33c77e8e441454de761a5d3d7c327199d83b672ed46414740</DdbDebSha256>
-        <DdbWindowsZipSha256>bac5c9f042333d91a31e62652178b106e4ffa016f59458c6ba26506186e1f543</DdbWindowsZipSha256>
+        <DdbVersion>2.8.1</DdbVersion>
+        <DdbDebSha256>805bce27c2db358c88016e956cb6fbc880a08c221829187fe80fd2f199c6f904</DdbDebSha256>
+        <DdbWindowsZipSha256>ac7d2342759f9ed703b0484bfaf585e613d77d98796169e3030ceccef0c5fb57</DdbWindowsZipSha256>
     </PropertyGroup>
 
 </Project>

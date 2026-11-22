@@ -206,3 +206,8 @@ when a file is missing or when an unlisted file is added, so the fixtures change
   the build warnings `3dtiles-not-generated` and `textures-outside-dataset`; the Registry passes all of them through.
   `entry-types`: the `Vector` type has the sidecars `xsd` and `gfs`. `Contract/README.md` has the 2.8.0 entry. No
   vector changed and no adapter change.
+* 2026-11-22: DroneDB `4154c08ab878ab42dedbbeefa1bbb820674173c1` (the DroneDB v2.8.1 release, the pinned build, libddb
+  ABI 2.8, no export added or removed: `DdbAbi.Minor` stays 6). `Contract/README.md` has the 2.8.1 entry (ddb-tilers
+  0.13.4: a point-cloud tile zoomed in past the density of the cloud draws a surface; Obj2Tiles v1.10.4: the 3D Tiles
+  of an OBJ whose statements are indented with a tab, as ODM writes them). No fixture, schema or vector changed and no
+  adapter change.
