@@ -1,7 +1,9 @@
 using System;
 using NUnit.Framework;
 using Registry.Ports.DroneDB;
+using Registry.Web.Exceptions;
 using Registry.Web.Models;
+using Registry.Web.Test.Support;
 using Shouldly;
 
 namespace Registry.Web.Test;
@@ -101,5 +103,55 @@ public class RescanFilterTest
 
         filter.Matches(new Entry { Path = "scan.copc.laz", Type = EntryType.PointCloud }).ShouldBeTrue();
         filter.Matches(new Entry { Path = "scan.laz", Type = EntryType.PointCloud }).ShouldBeFalse();
+    }
+
+    [Test]
+    public void ForPaths_NormalizesAndDeduplicatesThePaths_AndSelectsMoreThanTheWholeIndex()
+    {
+        var filter = RescanFilter.ForPaths(TestPaths.Policy, ["a/b.jpg", "/a//b.jpg", "folder\\sub/", "c.tif"]);
+
+        filter.Paths.ShouldBe(["a/b.jpg", "folder/sub", "c.tif"]);
+        filter.IsEmpty.ShouldBeFalse("a filter with paths does not select every entry");
+        filter.Types.ShouldBeEmpty();
+        filter.Extensions.ShouldBeEmpty();
+        filter.ToString().ShouldContain("paths: a/b.jpg, folder/sub, c.tif");
+    }
+
+    [TestCase("")]
+    [TestCase("  ")]
+    [TestCase("/")]
+    [TestCase(".")]
+    [TestCase("a/../b.jpg")]
+    [TestCase(".uploads/x.jpg")]
+    public void ForPaths_TheRootAndAPathThatBreaksTheRule_AreRefused(string path)
+    {
+        Should.Throw<InvalidDatasetPathException>(() => RescanFilter.ForPaths(TestPaths.Policy, ["ok.jpg", path]));
+    }
+
+    [Test]
+    public void ToOptions_PassesThePaths_AndNoneForAFilterWithout()
+    {
+        RescanFilter.ForPaths(TestPaths.Policy, ["a.jpg", "dir"]).ToOptions(true).ShouldSatisfyAllConditions(
+            o => o.Paths.ShouldBe(["a.jpg", "dir"]),
+            o => o.StopOnError.ShouldBeTrue(),
+            o => o.Types.ShouldBeNull(),
+            o => o.Extensions.ShouldBeNull());
+
+        RescanFilter.Parse("vector", null).ToOptions(false).Paths.ShouldBeNull();
+    }
+
+    [TestCase("dir/a.jpg", true)]
+    [TestCase("dir/sub/b.jpg", true)]
+    [TestCase("single.tif", true)]
+    [TestCase("dir2/a.jpg", false)]
+    [TestCase("directory.jpg", false)]
+    [TestCase("single.tif.bak", false)]
+    [TestCase("other/single.tif", false)]
+    public void Matches_AFileIsAtOrUnderOneOfThePaths(string path, bool expected)
+    {
+        var filter = RescanFilter.ForPaths(TestPaths.Policy, ["dir", "single.tif"]);
+
+        filter.Matches(new Entry { Path = path, Type = EntryType.Image }).ShouldBe(expected);
+        filter.Matches(new Entry { Path = "dir", Type = EntryType.Directory }).ShouldBeFalse();
     }
 }

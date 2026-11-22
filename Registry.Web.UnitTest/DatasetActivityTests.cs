@@ -52,7 +52,7 @@ public class DatasetActivityTests
 
     [Test]
     public async Task ADatasetIsNotBusy_ForAnotherTool(
-        [Values(HeavyToolIds.Build, "import-file", "archive-extract")] string tool)
+        [Values(HeavyToolIds.Build, HeavyToolIds.RescanEntries, "import-file", "archive-extract")] string tool)
     {
         await using var context = Context(Job("t1", tool, "Processing"));
 

@@ -6,6 +6,7 @@ using System.Threading.Tasks;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Registry.Web.Attributes;
+using Registry.Web.Exceptions;
 using Registry.Web.Models;
 using Registry.Web.Models.DTO;
 using Registry.Web.Services.HeavyTasks;
@@ -252,18 +253,20 @@ public class DatasetsController : ControllerBaseEx
     }
 
     /// <summary>
-    /// Rescans the index of a dataset to update its metadata, then rebuilds what changed.
+    /// Rescans the index, or selected entries, of a dataset and rebuilds what changed.
     /// </summary>
     /// <remarks>
     /// Queues a <c>rescan-index</c> task (forced: a new task even when the same rescan ran just before) and answers 202
     /// with it; its progress and its end are those of the dataset's tasks. Until the task ends the dataset is busy: it can
-    /// only be deleted. Users with write access to the dataset only.
+    /// only be deleted. With <paramref name="paths"/> it queues a <c>rescan-entries</c> task instead, which rescans only
+    /// those entries and leaves the dataset usable. Users with write access to the dataset only.
     /// </remarks>
     /// <param name="orgSlug">The organization slug.</param>
     /// <param name="dsSlug">The dataset slug.</param>
     /// <param name="types">Optional comma-separated list of entry types to rescan (e.g., "image,geoimage,pointcloud"). If not specified, all types are rescanned.</param>
     /// <param name="stopOnError">Whether to stop processing on first error. Default is false: an entry that cannot be read is reported and the others are rescanned.</param>
     /// <param name="extensions">Optional comma-separated list of file extensions to rescan (e.g., "dwg,dxf"). An entry must match both filters. With a filter only the rescanned entries are rebuilt.</param>
+    /// <param name="paths">Optional dataset-relative entry paths to rescan (repeat the parameter): a file, or a folder for the entries under it. The dataset root is refused, a path that is not in the index is a 404. The entries are rescanned and rebuilt without locking the dataset. Cannot be combined with <paramref name="types"/> or <paramref name="extensions"/>.</param>
     /// <returns>The queued task.</returns>
     [HttpPost(RoutesHelper.DatasetSlug + "/rescan", Name = nameof(DatasetsController) + "." + nameof(RescanIndex))]
     [ProducesResponseType(typeof(SubmitTaskResponseDto), StatusCodes.Status202Accepted)]
@@ -276,16 +279,35 @@ public class DatasetsController : ControllerBaseEx
         [FromRoute, Required] string dsSlug,
         [FromQuery] string? types = null,
         [FromQuery] bool stopOnError = false,
-        [FromQuery] string? extensions = null, CancellationToken ct = default)
+        [FromQuery] string? extensions = null,
+        [FromQuery] string[]? paths = null, CancellationToken ct = default)
     {
-        var task = await _tasksManager.SubmitAsync(orgSlug, dsSlug, new SubmitTaskRequestDto
-        {
-            ToolId = HeavyToolIds.RescanIndex,
-            Params = RescanIndexTool.CreateParams(RescanFilter.Parse(types, extensions), stopOnError),
-            Force = true
-        }, ct);
+        var request = paths is { Length: > 0 }
+            ? EntriesRescanRequest(paths, types, extensions, stopOnError)
+            : new SubmitTaskRequestDto
+            {
+                ToolId = HeavyToolIds.RescanIndex,
+                Params = RescanIndexTool.CreateParams(RescanFilter.Parse(types, extensions), stopOnError),
+                Force = true
+            };
+        var task = await _tasksManager.SubmitAsync(orgSlug, dsSlug, request, ct);
 
         return Accepted(task.StatusUrl, task);
     }
 
+    // The entries to rescan are the whole selection: the types and extensions of a rescan of the index would narrow it
+    // in a way the rescan of entries does not offer
+    private static SubmitTaskRequestDto EntriesRescanRequest(string[] paths, string? types, string? extensions,
+        bool stopOnError)
+    {
+        if (!string.IsNullOrWhiteSpace(types) || !string.IsNullOrWhiteSpace(extensions))
+            throw new BadRequestException("Rescan the entries of 'paths' or filter by 'types' and 'extensions', not both");
+
+        return new SubmitTaskRequestDto
+        {
+            ToolId = HeavyToolIds.RescanEntries,
+            Params = RescanEntriesTool.CreateParams(paths, stopOnError),
+            Force = true
+        };
+    }
 }

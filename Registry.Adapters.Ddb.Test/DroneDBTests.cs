@@ -1241,6 +1241,36 @@ public class NativeDdbWrapperTests : TestBase
         Should.Throw<DdbException>(() => DdbWrapper.RescanIndex(area.TestFolder, new RescanOptions(Extensions: "*.txt")));
     }
 
+    /// <summary>
+    /// A rescan with paths re-reads the entries they select: a file itself, a folder the files under it. The other
+    /// entries are not touched, and a path that is not in the index is an error item, not an exception.
+    /// </summary>
+    [Test]
+    public void RescanIndex_WithPaths_OnlyTheSelectedEntries()
+    {
+        using var area = new TestArea(nameof(RescanIndex_WithPaths_OnlyTheSelectedEntries));
+
+        DdbWrapper.Init(area.TestFolder);
+        Directory.CreateDirectory(Path.Join(area.TestFolder, "dir"));
+        string[] files = ["notes.txt", "other.txt", "dir/a.txt", "dir/b.md"];
+        foreach (var file in files)
+            File.WriteAllText(Path.Join(area.TestFolder, file), file);
+        DdbWrapper.Add(area.TestFolder, [.. files.Select(f => Path.Join(area.TestFolder, f))]);
+
+        var res = DdbWrapper.RescanIndex(area.TestFolder,
+            new RescanOptions(StopOnError: false, Paths: ["notes.txt", "dir", "missing.txt"]))
+            .OrderBy(r => r.Path, StringComparer.Ordinal).ToList();
+
+        res.Select(r => r.Path).ShouldBe(["dir/a.txt", "dir/b.md", "missing.txt", "notes.txt"]);
+        res.Where(r => r.Path != "missing.txt").ShouldAllBe(r => r.Success);
+        res.Single(r => r.Path == "missing.txt").Success.ShouldBeFalse();
+        res.Single(r => r.Path == "missing.txt").Error.ShouldNotBeNullOrEmpty();
+
+        // Narrowed by the extension: the paths and the filter must both match
+        DdbWrapper.RescanIndex(area.TestFolder, new RescanOptions(Extensions: "md", Paths: ["dir", "notes.txt"]))
+            .Select(r => r.Path).ShouldBe(["dir/b.md"]);
+    }
+
     [Test]
     public void RescanIndex_NonexistentPath_Exception()
     {

@@ -53,8 +53,11 @@ public static class ProcessingPlatformServiceCollectionExtensions
         // The extraction of a photogrammetry result bundle into its dataset (the last step of the photogrammetry tool)
         services.AddSingleton<PhotogrammetryResultsImport>();
 
-        // What a rescan rebuilds, shared by the rescan-index tool and the rescan endpoint.
+        // What a rescan rebuilds, shared by the rescan tools and the rescan endpoint.
         services.AddScoped<RescanRebuild>();
+
+        // The rescan every rescan tool runs: rescan, log, rebuild what changed
+        services.AddSingleton<RescanExecution>();
 
         // The export size limit of the raster-export submit: the check of the direct export (FR-RAS-16, D-023)
         services.AddSingleton<IRasterExportSizeCheck, Services.Objects.RasterExportSizeCheck>();
@@ -69,6 +72,7 @@ public static class ProcessingPlatformServiceCollectionExtensions
         services.AddSingleton<IHeavyTool, AlignRasterTool>();
         services.AddSingleton<IHeavyTool, MaskBordersTool>();
         services.AddSingleton<IHeavyTool, RescanIndexTool>();
+        services.AddSingleton<IHeavyTool, RescanEntriesTool>();
         services.AddSingleton<IHeavyTool, ArchiveExtractTool>();
         services.AddSingleton<IHeavyTool, SplatTrainingExportTool>();
         services.AddSingleton<IHeavyTool, SplatSpzExportTool>();

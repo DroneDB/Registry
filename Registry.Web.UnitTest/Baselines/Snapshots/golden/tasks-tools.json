@@ -526,6 +526,42 @@
       "disabledMessage": null
     },
     {
+      "id": "rescan-entries",
+      "version": "1",
+      "title": "Rescan entries",
+      "requiredAccess": "Write",
+      "producesArtifact": false,
+      "inputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "required": [
+          "paths"
+        ],
+        "properties": {
+          "paths": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "minItems": 1,
+            "description": "Dataset-relative paths of the entries to rescan: a file, or a folder for the entries under it. The dataset root is refused."
+          },
+          "stopOnError": {
+            "type": [
+              "boolean",
+              "null"
+            ],
+            "default": false,
+            "description": "Stop on the first entry error."
+          }
+        },
+        "additionalProperties": false
+      },
+      "hidden": false,
+      "disabled": false,
+      "disabledMessage": null
+    },
+    {
       "id": "archive-extract",
       "version": "1",
       "title": "Extract archive",

@@ -36,6 +36,16 @@ public static class DatasetEntryLookup
     /// <returns>The existing entry, or null when the name is free.</returns>
     public static ExistingEntry? FindExisting(IDDB ddb, string path) => Locate(ddb, path).Existing;
 
+    /// <summary>The indexed entry at <paramref name="path"/>: the one "the entry must exist" check of the requests that act on an entry.</summary>
+    /// <param name="ddb">The dataset.</param>
+    /// <param name="path">A normalized dataset path (the dataset root, "", has no entry).</param>
+    /// <exception cref="NotFoundException">The path is not in the index (404).</exception>
+    public static Entry Require(IDDB ddb, string path)
+    {
+        ArgumentNullException.ThrowIfNull(ddb);
+        return ddb.GetEntry(path) ?? throw new NotFoundException($"Cannot find entry: '{path}'");
+    }
+
     /// <summary>
     /// Where <paramref name="path"/> is in the dataset (D-040): the existing entry that holds it, if any, and the path
     /// to write it at. That path keeps the letter case of the existing entries: of the entry itself, or, for a free

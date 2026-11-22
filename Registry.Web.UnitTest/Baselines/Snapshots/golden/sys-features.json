@@ -214,6 +214,17 @@
         "disabledMessage": null
       },
       {
+        "id": "rescan-entries",
+        "version": "1",
+        "title": "Rescan entries",
+        "requiredAccess": "Write",
+        "producesArtifact": false,
+        "resultExtension": null,
+        "hidden": false,
+        "disabled": false,
+        "disabledMessage": null
+      },
+      {
         "id": "archive-extract",
         "version": "1",
         "title": "Extract archive",

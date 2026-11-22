@@ -225,3 +225,5 @@ after the scheme's own challenge: production's JWT scheme adds `WWW-Authenticate
   `ds-list-root`, `ds-search`, `stac-api-items` and `stac-api-search` have the `crsStatus` of the point cloud
   (`"projected"`), and those and `stac-item`, `stac-api-item` the `hasMask` of the GeoRaster (`false`); `sys-features`:
   the `Vector` entry type has the sidecars `xsd` and `gfs` (the schemas of a GML). Additive, no member changed.
+* The tool `rescan-entries` (a rescan of selected entries, which does not lock the dataset): `sys-features` lists it among the tools and
+  `tasks-tools` gives its input schema (`paths`, `stopOnError`). Additive, no member changed.

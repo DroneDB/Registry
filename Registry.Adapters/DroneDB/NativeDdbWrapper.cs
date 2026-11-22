@@ -232,15 +232,12 @@ public class NativeDdbWrapper : IDdbWrapper
     {
         options ??= new RescanOptions();
         var types = options.Types ?? string.Empty;
-        var extensions = options.Extensions;
+        var extensions = options.Extensions ?? string.Empty;
+        var paths = NormalizeSeparators([.. options.Paths ?? []]);
 
-        // DDBRescanEx only with an extension filter: the type-only rescan stays the call it always was
-        return string.IsNullOrWhiteSpace(extensions)
-            ? NativeCall.Invoke<List<RescanResult>>(nameof(NativeDdb.DDBRescan),
-                (out IntPtr output) => NativeDdb.DDBRescan(ddbPath, out output, types, options.StopOnError))
-            : NativeCall.Invoke<List<RescanResult>>(nameof(NativeDdb.DDBRescanEx),
-                (out IntPtr output) =>
-                    NativeDdb.DDBRescanEx(ddbPath, out output, types, extensions, options.StopOnError));
+        return NativeCall.Invoke<List<RescanResult>>(nameof(NativeDdb.DDBRescanEx2),
+            (out IntPtr output) => NativeDdb.DDBRescanEx2(ddbPath, out output, paths, paths.Length, types, extensions,
+                options.StopOnError));
     }
 
     // ---------------------------------------------------------------- build

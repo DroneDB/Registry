@@ -11,6 +11,7 @@ using Moq;
 using NUnit.Framework;
 using Registry.Ports.DroneDB;
 using Registry.Web.Data;
+using Registry.Web.Exceptions;
 using Registry.Web.Services.Adapters;
 using Registry.Web.Services.HeavyTasks.Adapters;
 using Registry.Web.Services.HeavyTasks.Models;
@@ -49,7 +50,8 @@ public class RescanIndexToolTest
         var services = new ServiceCollection();
         services.AddLogging();
         services.AddScoped(_ => TestJobs.Rebuild(_db.NewContext(), _jobs.Object, _cacheInvalidator.Object));
-        _tool = new RescanIndexTool(services.BuildServiceProvider().GetRequiredService<IServiceScopeFactory>());
+        _tool = new RescanIndexTool(
+            new RescanExecution(services.BuildServiceProvider().GetRequiredService<IServiceScopeFactory>()));
     }
 
     [TearDown]
@@ -186,6 +188,17 @@ public class RescanIndexToolTest
 
         Should.Throw<ArgumentException>(() => _tool.ValidateAsync(request,
             new HeavyToolValidationContext(_ddb.Object, null, NullLogger.Instance), CancellationToken.None));
+    }
+
+    /// <summary>A path of the request would be ignored by a rescan of the index: it is refused, and names rescan-entries.</summary>
+    [Test]
+    public void Validate_ARequestPath_IsRefusedInsteadOfIgnored()
+    {
+        var request = new HeavyToolRequest("rescan-index", "1", "org", "ds", "a.tif", JsonSerializer.SerializeToElement(new { }));
+
+        var ex = Should.Throw<BadRequestException>(() => _tool.ValidateAsync(request,
+            new HeavyToolValidationContext(_ddb.Object, null, NullLogger.Instance), CancellationToken.None));
+        ex.Message.ShouldContain("rescan-entries");
     }
 
     private Task<HeavyToolArtifact?> Execute(object prms)

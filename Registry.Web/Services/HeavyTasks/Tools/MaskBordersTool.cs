@@ -95,7 +95,7 @@ public sealed class MaskBordersTool(DatasetPathPolicy paths, TaskFileIndexer ind
         Near(args);
 
         var path = paths.Normalize(args.Path, "path");
-        var entry = ctx.Ddb.GetEntry(path) ?? throw new NotFoundException($"Cannot find entry: '{path}'");
+        var entry = DatasetEntryLookup.Require(ctx.Ddb, path);
         if (entry.Type != EntryType.GeoRaster)
             throw new BadRequestException($"Entry '{path}' is not a georaster");
 

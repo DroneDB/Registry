@@ -153,13 +153,13 @@ internal static unsafe partial class NativeDdb
     [LibraryImport(Library, StringMarshalling = StringMarshalling.Utf8)]
     internal static partial DdbResult DDBMoveEntry(string ddbPath, string source, string dest);
 
+    /// <summary>
+    /// The one rescan export (ABI 2.9): the entries <paramref name="paths"/> select (a folder selects the entries under
+    /// it), narrowed by the types and extensions; no path rescans every entry.
+    /// </summary>
     [LibraryImport(Library, StringMarshalling = StringMarshalling.Utf8)]
-    internal static partial DdbResult DDBRescan(string ddbPath, out IntPtr output, string types,
-        [MarshalAs(UnmanagedType.U1)] bool stopOnError);
-
-    [LibraryImport(Library, StringMarshalling = StringMarshalling.Utf8)]
-    internal static partial DdbResult DDBRescanEx(string ddbPath, out IntPtr output, string types, string extensions,
-        [MarshalAs(UnmanagedType.U1)] bool stopOnError);
+    internal static partial DdbResult DDBRescanEx2(string ddbPath, out IntPtr output, string[] paths, int numPaths,
+        string types, string extensions, [MarshalAs(UnmanagedType.U1)] bool stopOnError);
 
     // ------------------------------------------------------------------ build
 

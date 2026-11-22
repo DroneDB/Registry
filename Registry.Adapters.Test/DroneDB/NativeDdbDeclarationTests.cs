@@ -93,17 +93,17 @@ public class NativeDdbDeclarationTests
     }
 
     /// <summary>
-    /// libddb 2.6 is the only libddb the Registry runs: every export it calls since 2.0 is required by the startup
-    /// handshake (ABI 2.6), with no optional export and no fallback for an older library: the Ex variants of align, merge
+    /// libddb 2.9 is the only libddb the Registry runs: every export it calls since 2.0 is required by the startup
+    /// handshake (ABI 2.9), with no optional export and no fallback for an older library: the Ex variants of align, merge
     /// and mask, the raster value exports with a <c>DDBRasterOptions</c>, the renders and the export with options
     /// (U-202, U-406), the build and the contours with progress (FR-PRC-42, U-413), the visualization tile encoded
     /// by libddb in the format asked for (<c>DDBMemoryTileEx3</c>, ABI 2.5), the only tile-ex export Registry calls, and
     /// the region and index renders with options (<c>DDBRenderRasterRegionEx2</c>, <c>DDBRenderRasterIndexEx</c>).
     /// </summary>
     [Test]
-    public void TheExportsOfLibddb25_AreRequired_WithTheRequiredAbi26()
+    public void TheExportsOfLibddb_AreRequired_WithTheRequiredAbi29()
     {
-        DdbAbi.Minor.ShouldBe(6);
+        DdbAbi.Minor.ShouldBe(9);
         DdbAbi.RequiredSymbols.ShouldContain("DDBBuildEx2");
         DdbAbi.RequiredSymbols.ShouldContain("DDBGenerateContoursEx2");
         DdbAbi.RequiredSymbols.ShouldContain("DDBExportRaster3");
@@ -120,6 +120,10 @@ public class NativeDdbDeclarationTests
         DdbAbi.RequiredSymbols.ShouldNotContain("DDBRenderRasterIndex");
         DdbAbi.RequiredSymbols.ShouldContain("DDBGetRasterValueInfoEx");
         DdbAbi.RequiredSymbols.ShouldContain("DDBResolveBuildFile");
+        // ABI 2.9: one rescan export for the whole index and for the entries a list of paths selects
+        DdbAbi.RequiredSymbols.ShouldContain("DDBRescanEx2");
+        DdbAbi.RequiredSymbols.ShouldNotContain("DDBRescan");
+        DdbAbi.RequiredSymbols.ShouldNotContain("DDBRescanEx");
         typeof(NativeDdb).Assembly.GetType("Registry.Adapters.DroneDB.NativeDdbOptional").ShouldBeNull();
         typeof(NativeDdbWrapper).GetProperty("BuildProgressSupported",
             BindingFlags.Static | BindingFlags.NonPublic | BindingFlags.Public).ShouldBeNull();

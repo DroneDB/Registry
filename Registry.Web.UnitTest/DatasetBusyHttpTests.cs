@@ -37,6 +37,7 @@ public sealed class DatasetBusyHttpTests : IDisposable
     private const string Busy = "importing-ds";
     private const string Idle = "idle-ds";
     private const string ImportTask = "busy-import";
+    private const string IndexedFile = "a.txt";
 
     private RegistryWebFactory _factory = null!;
     private HttpClient _client = null!;
@@ -53,6 +54,9 @@ public sealed class DatasetBusyHttpTests : IDisposable
             .Returns((string path, bool _, int _, bool _) =>
                 [new Registry.Ports.DroneDB.Entry { Path = "file://" + path, Type = EntryType.DroneDB, Properties = [] }]);
         _factory.DdbWrapper.Setup(d => d.ListEntrySummaries(It.IsAny<string>(), It.IsAny<EntryQuery>())).Returns([]);
+        // One file in the index of every dataset: the entry a rescan of entries names
+        _factory.DdbWrapper.Setup(d => d.GetEntry(It.IsAny<string>(), IndexedFile))
+            .Returns(new Registry.Ports.DroneDB.Entry { Path = IndexedFile, Type = EntryType.Generic });
         _client = _factory.CreateClient(new WebApplicationFactoryClientOptions { AllowAutoRedirect = false });
 
         var owner = await _factory.CreateUserAsync(Owner);
@@ -271,6 +275,68 @@ public sealed class DatasetBusyHttpTests : IDisposable
         busyStatus.ShouldBe(StatusCodes.Status409Conflict);
         problem![ApiErrorResponder.DatasetBusyMember]!.GetValue<string>().ShouldBe(DatasetActivity.Rescanning);
         problem[ApiErrorResponder.TaskIdMember]!.GetValue<string>().ShouldBe(taskId);
+    }
+
+    /// <summary>A rescan of entries is a task that leaves the dataset usable: 202 with its id, no busy state.</summary>
+    [Test]
+    public async Task TheRescanOfEntries_QueuesARescanEntriesTask_ThatLeavesTheDatasetUsable()
+    {
+        var (status, task) = await SendAsync(HttpMethod.Post,
+            "/orgs/" + Org + "/ds/" + Idle + "/rescan?paths=" + IndexedFile + "&paths=/" + IndexedFile + "&stopOnError=true");
+
+        status.ShouldBe(StatusCodes.Status202Accepted, task?.ToJsonString());
+        var taskId = task!["taskId"]!.GetValue<string>();
+        using (var scope = _factory.Services.CreateScope())
+        {
+            var row = await scope.ServiceProvider.GetRequiredService<RegistryContext>().JobIndices.AsNoTracking()
+                .SingleAsync(j => j.JobId == taskId);
+            row.ToolId.ShouldBe(HeavyToolIds.RescanEntries);
+            row.DsSlug.ShouldBe(Idle);
+            row.CurrentState.ShouldBeOneOf(TaskStateCatalog.Active);
+        }
+
+        (await SendAsync(HttpMethod.Get, "/orgs/" + Org + "/ds/" + Idle + "/ex")).Status.ShouldBe(StatusCodes.Status200OK);
+    }
+
+    /// <summary>A running rescan of entries is not a busy dataset: it reads (and, in libddb, writes) as before.</summary>
+    [Test]
+    public async Task ARunningRescanOfEntries_LeavesTheDatasetAt200()
+    {
+        using (var scope = _factory.Services.CreateScope())
+        {
+            var context = scope.ServiceProvider.GetRequiredService<RegistryContext>();
+            context.JobIndices.Add(new JobIndex
+            {
+                JobId = "running-entries", OrgSlug = Org, DsSlug = Idle, ToolId = HeavyToolIds.RescanEntries,
+                ToolVersion = "1", CurrentState = "Processing", CreatedAtUtc = DateTime.UtcNow,
+                LastStateChangeUtc = DateTime.UtcNow
+            });
+            await context.SaveChangesAsync();
+        }
+
+        (await SendAsync(HttpMethod.Get, "/orgs/" + Org + "/ds/" + Idle + "/ex")).Status.ShouldBe(StatusCodes.Status200OK);
+        var (_, list) = await SendAsync(HttpMethod.Get, "/orgs/" + Org + "/ds");
+        list!.AsArray().Single(d => d!["slug"]!.GetValue<string>() == Idle)!["busy"].ShouldBeNull();
+    }
+
+    [Test]
+    public async Task TheRescanOfEntries_WithTypesOrExtensions_Is400()
+    {
+        var url = "/orgs/" + Org + "/ds/" + Idle + "/rescan?paths=" + IndexedFile;
+
+        (await SendAsync(HttpMethod.Post, url + "&types=image")).Status.ShouldBe(StatusCodes.Status400BadRequest);
+        (await SendAsync(HttpMethod.Post, url + "&extensions=dwg")).Status.ShouldBe(StatusCodes.Status400BadRequest);
+    }
+
+    [Test]
+    public async Task TheRescanOfEntries_OfTheRootOrAnUnknownEntry_Is400Or404()
+    {
+        var url = "/orgs/" + Org + "/ds/" + Idle + "/rescan";
+
+        (await SendAsync(HttpMethod.Post, url + "?paths=")).Status.ShouldBe(StatusCodes.Status400BadRequest);
+        (await SendAsync(HttpMethod.Post, url + "?paths=/")).Status.ShouldBe(StatusCodes.Status400BadRequest);
+        (await SendAsync(HttpMethod.Post, url + "?paths=" + IndexedFile + "&paths=missing.tif"))
+            .Status.ShouldBe(StatusCodes.Status404NotFound);
     }
 
     /// <summary>The delete of a busy dataset goes through, and stops the import at once.</summary>

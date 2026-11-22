@@ -3,23 +3,26 @@ using System.Buffers;
 using System.Collections.Generic;
 using System.Linq;
 using Registry.Ports.DroneDB;
+using Registry.Web.Exceptions;
+using Registry.Web.Utilities;
 
 namespace Registry.Web.Models;
 
 /// <summary>
-/// Selects the index entries a rescan re-reads: an entry must match one of
-/// <see cref="Types"/> (when any) and one of <see cref="Extensions"/> (when any).
-/// Mirrors the DroneDB native filter (<c>DDBRescanEx</c>), which applies it again
+/// Selects the index entries a rescan re-reads: an entry must be one of <see cref="Paths"/> or under one of them
+/// (when any), match one of <see cref="Types"/> (when any) and one of <see cref="Extensions"/> (when any).
+/// Mirrors the DroneDB native filter (<c>DDBRescanEx2</c>), which applies it again
 /// inside the rescan, so <see cref="Matches"/> only decides what to submit.
 /// </summary>
 public sealed class RescanFilter
 {
     private static readonly SearchValues<char> InvalidExtensionChars = SearchValues.Create("/\\*? \t");
 
-    private RescanFilter(EntryType[] types, string[] extensions)
+    private RescanFilter(EntryType[] types, string[] extensions, string[]? paths = null)
     {
         Types = types;
         Extensions = extensions;
+        Paths = paths ?? [];
     }
 
     /// <summary>Entry types to rescan, or empty for all.</summary>
@@ -28,7 +31,14 @@ public sealed class RescanFilter
     /// <summary>Lowercase extensions without the leading dot (e.g. "dwg", "copc.laz"), or empty for all.</summary>
     public IReadOnlyList<string> Extensions { get; }
 
-    public bool IsEmpty => Types.Count == 0 && Extensions.Count == 0;
+    /// <summary>
+    /// Normalized dataset paths (<see cref="DatasetPathPolicy"/>, never the dataset root): a file selects itself, a
+    /// folder the entries under it. Empty for every entry.
+    /// </summary>
+    public IReadOnlyList<string> Paths { get; }
+
+    /// <summary>Whether the filter selects every entry. A filter with paths does not: it selects those entries.</summary>
+    public bool IsEmpty => Types.Count == 0 && Extensions.Count == 0 && Paths.Count == 0;
 
     /// <summary>The native "types" argument (comma-separated, lowercase), or null for all.</summary>
     public string? TypesArgument => Types.Count == 0
@@ -39,7 +49,8 @@ public sealed class RescanFilter
     public string? ExtensionsArgument => Extensions.Count == 0 ? null : string.Join(",", Extensions);
 
     /// <summary>The native rescan options for this filter.</summary>
-    public RescanOptions ToOptions(bool stopOnError) => new(TypesArgument, ExtensionsArgument, stopOnError);
+    public RescanOptions ToOptions(bool stopOnError) => new(TypesArgument, ExtensionsArgument, stopOnError,
+        Paths.Count == 0 ? null : Paths);
 
     /// <summary>
     /// Returns this filter, or throws when it selects every entry: a rescan that spans
@@ -49,6 +60,18 @@ public sealed class RescanFilter
     public RescanFilter RequireNotEmpty() => IsEmpty
         ? throw new ArgumentException("Specify at least one entry type or file extension to rescan")
         : this;
+
+    /// <summary>The filter that selects the entries at (or, for a folder, under) <paramref name="paths"/>.</summary>
+    /// <exception cref="InvalidDatasetPathException">A path breaks the dataset path rule, or is the dataset root (400).</exception>
+    public static RescanFilter ForPaths(DatasetPathPolicy policy, IEnumerable<string> paths)
+    {
+        ArgumentNullException.ThrowIfNull(policy);
+        ArgumentNullException.ThrowIfNull(paths);
+
+        // The root names no entry and would select the whole index: it is refused as an empty path
+        var normalized = paths.Select(policy.NormalizeRequestPath).Distinct(StringComparer.Ordinal).ToArray();
+        return new RescanFilter([], [], normalized);
+    }
 
     /// <summary>Parses comma-separated lists, as the rescan endpoints and the rescan-index tool take them.</summary>
     /// <exception cref="ArgumentException">An unknown type, a directory type or an invalid extension.</exception>
@@ -107,6 +130,9 @@ public sealed class RescanFilter
         if (entry.Type == EntryType.Directory || string.IsNullOrEmpty(entry.Path))
             return false;
 
+        if (Paths.Count > 0 && !Paths.Any(p => IsAtOrUnder(entry.Path, p)))
+            return false;
+
         if (Types.Count > 0 && !Types.Contains(entry.Type))
             return false;
 
@@ -117,7 +143,12 @@ public sealed class RescanFilter
     }
 
     public override string ToString() =>
-        $"types: {TypesArgument ?? "all"}, extensions: {ExtensionsArgument ?? "all"}";
+        $"types: {TypesArgument ?? "all"}, extensions: {ExtensionsArgument ?? "all"}" +
+        (Paths.Count == 0 ? string.Empty : $", paths: {string.Join(", ", Paths)}");
+
+    private static bool IsAtOrUnder(string entryPath, string path) =>
+        entryPath.StartsWith(path, StringComparison.Ordinal) &&
+        (entryPath.Length == path.Length || entryPath[path.Length] == '/');
 
     private static IEnumerable<string> SplitItems(IEnumerable<string>? items) =>
         (items ?? []).Where(i => i != null).SelectMany(i => i.Split(','));

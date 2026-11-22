@@ -125,6 +125,25 @@ public class ToolParametersTests
         rescan.StopOnError.ShouldBe(false);
     }
 
+    /// <summary>The params of a rescan-entries request read back as they were written (the submit and the stored task agree).</summary>
+    [Test]
+    public void RescanEntries_ParamsRoundTrip()
+    {
+        var created = RescanEntriesTool.CreateParams(["a.jpg", "folder"], true);
+        var p = Read<RescanEntriesTool, RescanEntriesTool.Parameters>("rescan-entries", created.GetRawText());
+
+        p.Paths.ShouldNotBeNull().ShouldBe(["a.jpg", "folder"]);
+        p.StopOnError.ShouldBe(true);
+
+        // Ill-typed values read as absent, as for every tool
+        var lenient = Read<RescanEntriesTool, RescanEntriesTool.Parameters>("rescan-entries",
+            """{"paths":"a.jpg","stopOnError":"yes"}""");
+        lenient.Paths.ShouldBeNull();
+        lenient.StopOnError.ShouldBeNull();
+        Read<RescanEntriesTool, RescanEntriesTool.Parameters>("rescan-entries", """{"paths":["a.jpg",1,null,"b.jpg"]}""")
+            .Paths.ShouldBe(["a.jpg", "b.jpg"]);
+    }
+
     [Test]
     public void StoredImportDataset_KeepsItsSourceParametersObject()
     {

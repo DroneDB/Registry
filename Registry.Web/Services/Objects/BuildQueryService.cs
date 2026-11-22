@@ -57,7 +57,7 @@ public sealed class BuildQueryService
 
         // No path names no entry (the dataset root has none)
         path ??= string.Empty;
-        var entry = access.Ddb.GetEntry(path) ?? throw new NotFoundException($"Cannot find source entry: '{path}'");
+        var entry = DatasetEntryLookup.Require(access.Ddb, path);
 
         var build = _artifacts.GetBuild(access.Ddb, entry.Path);
         if (!build.CanBeBuilt())

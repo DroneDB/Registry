@@ -24,7 +24,7 @@ public static class DdbAbi
     public const int Major = 2;
 
     /// <summary>
-    /// <c>DDB_ABI_MINOR</c> Registry needs at least: 6 (DroneDB 2.6.0). ABI 2.4 brought the output options of align,
+    /// <c>DDB_ABI_MINOR</c> Registry needs at least: 9 (DroneDB 2.9.0). ABI 2.4 brought the output options of align,
     /// merge multispectral and mask borders (<c>DDBAlignRasterEx</c>, <c>DDBMergeMultispectralEx</c>,
     /// <c>DDBMaskBordersEx</c>), the raster value exports with a <c>DDBRasterOptions</c> (with the unit of the rescale,
     /// <c>rescaleUnit</c>), the build key (<c>key</c>, <c>buildKey</c>, <c>buildKeyChanged</c>, the key argument of
@@ -33,11 +33,13 @@ public static class DdbAbi
     /// the visualization tile encoded once by libddb in the format asked for (PNG, JPEG or WebP), and
     /// <c>DDBRenderRasterRegionEx2</c> and <c>DDBRenderRasterIndexEx</c>, the renders over an opaque background and in
     /// the format <c>rgba</c>, so Registry never decodes an image to encode it again; ABI 2.6 adds no export but the
-    /// <c>DDBConfigure</c> setting <c>artefactCacheMb</c> (<c>Ddb:ArtefactCacheMb</c>), which an older libddb refuses.
-    /// Every export <see cref="NativeDdb"/> declares is in ABI 2.5; an older libddb is refused, so no code path depends
+    /// <c>DDBConfigure</c> setting <c>artefactCacheMb</c> (<c>Ddb:ArtefactCacheMb</c>), which an older libddb refuses;
+    /// ABI 2.9 adds <c>DDBRescanEx2</c>, the rescan of the entries a list of paths selects (the one rescan export Registry
+    /// calls, with or without paths).
+    /// Every export <see cref="NativeDdb"/> declares is in ABI 2.9; an older libddb is refused, so no code path depends
     /// on the ABI minor.
     /// </summary>
-    public const int Minor = 6;
+    public const int Minor = 9;
 
     private const string Library = "ddb";
 

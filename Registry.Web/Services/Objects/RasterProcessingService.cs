@@ -158,7 +158,7 @@ public sealed class RasterProcessingService
         // One job per source, and none while an unfinished task writes the masked copy (the Mask Borders tool): 409
         await _jobs.EnsureNoActiveJobAsync(orgSlug, dsSlug, path, MaskBordersJob, MaskedOutputPath(path), ct);
 
-        var entry = ddb.GetEntry(path) ?? throw new NotFoundException($"Cannot find entry: '{path}'");
+        var entry = DatasetEntryLookup.Require(ddb, path);
         if (entry.Type != EntryType.GeoRaster)
             throw new BadRequestException($"Entry '{path}' is not a georaster");
 

@@ -12,6 +12,9 @@ public static class HeavyToolIds
     /// <summary>Index rescan tool.</summary>
     public const string RescanIndex = "rescan-index";
 
+    /// <summary>Rescan of selected entries: unlike <see cref="RescanIndex"/> it does not lock the dataset.</summary>
+    public const string RescanEntries = "rescan-entries";
+
     /// <summary>Dataset import tool: <c>ImportManager</c> creates the dataset it fills.</summary>
     public const string ImportDataset = "import-dataset";
 
