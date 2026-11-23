@@ -40,7 +40,7 @@
             MSBuild; ci: fetch-windows-zip) and fails the build when its SHA256 differs.
         scripts/ddb-release.sh check (CI) fails when the pin is malformed or written elsewhere, or
         when anything downloads releases/latest. Startup checks the ABI of the loaded library
-        (DdbAbi: libddb 2.x, ABI major 2, minor >= 9), not this version number.
+        (DdbAbi: libddb 2.x, ABI major 2, minor >= 10), not this version number.
 
         DdbSource:
           release  a published release: DdbVersion, and the SHA256 of ddb_<DdbVersion>_amd64.deb and
@@ -60,8 +60,12 @@
                    request merge commit for a PR run), e.g. ddb_2.0.0~git1813815_amd64.deb next to
                    ddb-2.0.0-Windows.zip. Remove the property with the move to the release.
 
-        Pinned now (2026-11-22): the DroneDB v2.9.0 release (ABI 2.9; the handshake requires ABI 2.9:
-        DdbAbi.Minor 9). 2.9.0 adds DDBRescanEx2, the rescan of a list of entry paths (a file, or a folder
+        Pinned now (2026-11-23): the DroneDB v2.10.0 release (ABI 2.10; the handshake requires ABI 2.10:
+        DdbAbi.Minor 10). 2.10.0 adds DDBFindCoverage, the images whose footprint sees a GeoJSON point, line
+        or polygon, ranked by how close the middle of the image is to it, with the approximate pixel of the
+        place in each image, which the coverage endpoint (the Photos tab of an annotation) uses; a point cloud
+        in a local CRS says that its CRS is local (ddb-tilers 0.13.5 refuses its tiles with the same words).
+        2.9.0 adds DDBRescanEx2, the rescan of a list of entry paths (a file, or a folder
         for the entries under it), each entry re-read outside the writer lock of the index and committed on
         its own, which the rescan of selected entries (rescan-entries) uses; the adapter calls it for every
         rescan. 2.8.1 draws a point-cloud map tile
@@ -80,9 +84,9 @@
     -->
     <PropertyGroup>
         <DdbSource>release</DdbSource>
-        <DdbVersion>2.9.0</DdbVersion>
-        <DdbDebSha256>e24ae4d46faa371b5920277467a82c6cbe622bbfada93ec66310e1cb0236f4ba</DdbDebSha256>
-        <DdbWindowsZipSha256>3b32e1f17c31405f33f8a7d94f8f20c0956a3d971823af72e559c52f4002582d</DdbWindowsZipSha256>
+        <DdbVersion>2.10.0</DdbVersion>
+        <DdbDebSha256>0df9efa8994e41332f3e10bfb41c139068b039ca3738699664bbf73b60e3b0aa</DdbDebSha256>
+        <DdbWindowsZipSha256>cd9417532ed0348bfe038e1ee554084d27312e66dc2bb59e8977d8490165bb60</DdbWindowsZipSha256>
     </PropertyGroup>
 
 </Project>

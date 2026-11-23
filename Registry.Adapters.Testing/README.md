@@ -223,3 +223,8 @@ when a file is missing or when an unlisted file is added, so the fixtures change
   entry of `Contract/README.md` changed, which now lists a geometry spanning more than 180 degrees of longitude, or one
   that cannot be projected, among the `DDBERR_INVALIDARGS` refusals of `DDBFindCoverage`. No fixture, schema or vector
   changed.
+* 2026-11-23: DroneDB `06ca124d75b81169601bb2fd1b99988751156e69` (the v2.10.0 release, libddb 2.10.0, ABI 2.10, the
+  pinned build). `info-pointcloud-no-footprint`: the `warning` of a point cloud in a local CRS says that the CRS is
+  local (`footprint unavailable: the file's coordinate system ("Site grid") is a local one, with no position on the
+  earth`); the 2.10.0 entry of `Contract/README.md` says so. Same field and type, no adapter change; no other fixture,
+  schema or vector changed.

@@ -1,10 +1,10 @@
 # libddb contract fixtures vendored from DroneDB. Do not edit the vendored files:
 # run Registry.Adapters.Testing/update-contract.sh <DroneDB clone> <commit> instead.
 repository: https://github.com/DroneDB/DroneDB
-commit: 3c5d3ecfc0aa86662857f20f2dde38f7f452e20e
+commit: 06ca124d75b81169601bb2fd1b99988751156e69
 path: tests/contract
 # sha256 and path relative to Contract/ (sha256sum format), one line per vendored file
-ac57496620c1b2b682aaef8d9478cfbafac82420db013230c0e49949dd6be864  README.md
+b2522b7b975e8c05e38a68d1e5942e24bdebd0de17a8f2de3aacacfa446614e8  README.md
 f90c6b91994f9cb0c4b1fd3c4245a98f353d8fb3b7aff025ebccb94f425a6164  fixtures/add.json
 0abcbb343032b20d02a3f15ba0a93d80cc73b83c29478eea26865c1834758772  fixtures/build-artifacts-pending.json
 fb06cf05210fd83ba38373144884fe1accb1d09d3d4ff3f46c42c84a929d3b53  fixtures/build-artifacts-pointcloud.json
@@ -22,7 +22,7 @@ d4f618c3f8ebbb4b31d27d7ec212678e20d3f1144ba779307ef6814ba7fe578c  fixtures/get-d
 8cbf5c0bbe7829f2c5b6afe54ff52f16f036fc82667a3d53cd93574b4e7b4bff  fixtures/info-generic.json
 fe06a0394ed842341a1b13911ab9c45f5498f13ea96942da694f99f8cbbf7aef  fixtures/info-georaster.json
 3f726cf18deda44528056dc079c1c3464599778c35548e33a9abc46354a90faf  fixtures/info-image.json
-9fa9f28e988d56650132a5358a4751d6c579cb20afb5c17d60341af55d37db04  fixtures/info-pointcloud-no-footprint.json
+0b803383aa16b99b5693d560af5982b7a91947741e002ac05069839eaf2850b5  fixtures/info-pointcloud-no-footprint.json
 ac24e239b71b50421ab3ea691366b4a9f7aa35ea73d07fff596a809a9c7905d0  fixtures/info-pointcloud.json
 8d27ed42767ef6c171afa7f0760f70ecae43b73df29d6d30539e8df5cb8e44e2  fixtures/info-vector.json
 be0772acaf0aefa7222741ce3700ab751b735f37f771d2e9459275c45bc165de  fixtures/list-entries-ex.json
