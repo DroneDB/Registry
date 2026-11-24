@@ -13,7 +13,8 @@ namespace Registry.Ports.DroneDB;
 /// <param name="IoThreads">Threads of one disk-bound section.</param>
 /// <param name="CacheDir">libddb's cache folder.</param>
 /// <param name="GdalCacheMb">Size in MiB of GDAL's block cache (0: a libddb that does not report it).</param>
-/// <param name="ArtefactCacheMb">Bound in MiB of the artefact cache (0: no bound, or a libddb that does not report it).</param>
+/// <param name="ArtefactCacheMb">Bound in MiB of the artefact cache of a libddb up to 2.12 (0: no bound, a libddb that does
+/// not report it, or 2.13 and later, which keep no artefact cache).</param>
 public sealed record DdbEffectiveConfig(long MinFreeDiskMb, int CpuPoolSize, int IoThreads, string? CacheDir,
     int GdalCacheMb = 0, long ArtefactCacheMb = 0)
 {

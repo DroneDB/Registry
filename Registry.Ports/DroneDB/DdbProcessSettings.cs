@@ -12,10 +12,8 @@ namespace Registry.Ports.DroneDB;
 /// <param name="GdalCacheMb">Size in MiB of GDAL's block cache, shared by the whole process (16..1048576). Sent
 /// with <c>DDBConfigure</c> it is the size of the cache at once (raising or lowering GDAL's own default);
 /// left out libddb keeps its default (1024 MiB, an upper bound only: <c>DDB_GDAL_CACHE_MB</c>).</param>
-/// <param name="ArtefactCacheMb">Bound in MiB of libddb's artefact cache (<c>CacheDir</c>/artefacts: the COG made
-/// for the map tiles of each photo or raster, the normalized copies of rasters); past it the least recently used
-/// files are removed. 0: no bound. Left out libddb uses <c>DDB_ARTEFACT_CACHE_MB</c> or its default (4096 MiB).
-/// ABI 2.6.</param>
+/// <param name="ArtefactCacheMb">No effect since libddb 2.13, which keeps no artefact cache (it accepts and reports
+/// the setting, default 0). Up to 2.12, the bound in MiB of <c>CacheDir</c>/artefacts. ABI 2.6.</param>
 public sealed record DdbProcessSettings(
     int? CpuPoolSize = null,
     int? IoThreads = null,

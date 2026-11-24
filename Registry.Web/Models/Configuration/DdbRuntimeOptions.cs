@@ -42,11 +42,10 @@ public sealed class DdbRuntimeOptions
     public int? GdalCacheMb { get; set; }
 
     /// <summary>
-    /// Bound in MiB of libddb's artefact cache (<see cref="CacheDir"/>/artefacts): the COG libddb makes for the map
-    /// tiles of each photo or raster that is viewed, and the normalized copies of rasters. When a new one takes the
-    /// cache past the bound, the least recently used files are removed (never one used in the last 5 minutes);
-    /// 0: no bound (files not used for 5 days are removed either way). Left out, libddb uses
-    /// <c>DDB_ARTEFACT_CACHE_MB</c> or its default (4096).
+    /// Has no effect since libddb 2.13, which keeps no artefact cache: a user raster is read in place or through a
+    /// copy that lives as long as its reader, and the tiles of a photo are drawn from the photo. Still accepted and
+    /// sent when set, so a configuration written for an earlier version starts as it did. Up to libddb 2.12 it was the
+    /// bound in MiB of <see cref="CacheDir"/>/artefacts (default 4096; 0: no bound).
     /// </summary>
     [Range(0L, 10_000_000_000_000L)]
     public long? ArtefactCacheMb { get; set; }
