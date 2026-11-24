@@ -236,3 +236,5 @@ when a file is missing or when an unlisted file is added, so the fixtures change
   rounded means of the exact sums; `build-artifacts` and `list-entries-ex` have `"statistics"` on the `raster.cog`
   artifact (`build-artifacts.schema.json`); `Contract/README.md` has the 2.11.0 entry. No other fixture, schema or
   vector changed.
+* 2026-11-24: DroneDB `7b98c904670f93ede6b081b8b8f98575038d287b` (the v2.11.0 release, libddb 2.11.0, ABI 2.11, the
+  pinned build): vendor/ddb-tilers at its release v0.14.0. No fixture, schema or vector changed.
