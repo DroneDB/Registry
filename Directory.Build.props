@@ -60,8 +60,13 @@
                    request merge commit for a PR run), e.g. ddb_2.0.0~git1813815_amd64.deb next to
                    ddb-2.0.0-Windows.zip. Remove the property with the move to the release.
 
-        Pinned now (2026-11-23): the DroneDB v2.10.0 release (ABI 2.10; the handshake requires ABI 2.10:
-        DdbAbi.Minor 10). 2.10.0 adds DDBFindCoverage, the images whose footprint sees a GeoJSON point, line
+        Pinned now (2026-11-24): the DroneDB v2.11.0 release (ABI 2.11; the handshake requires ABI 2.11:
+        DdbAbi.Minor 11). 2.11.0 lists the formulas of a raster with its raster info, without its statistics;
+        computes the exact statistics of a raster in one parallel pass of ddb-tilers 0.14.0 (ddbtRasterStatistics);
+        says whether the COG of a built GeoRaster has its statistics next to it (the statistics member of the
+        raster.cog artifact) and writes them on request (DDBBuildRasterStatistics), which the nightly completeness
+        check uses for the COGs built before libddb wrote them at build time.
+        2.10.0 adds DDBFindCoverage, the images whose footprint sees a GeoJSON point, line
         or polygon, ranked by how close the middle of the image is to it, with the approximate pixel of the
         place in each image, which the coverage endpoint (the Photos tab of an annotation) uses; a point cloud
         in a local CRS says that its CRS is local (ddb-tilers 0.13.5 refuses its tiles with the same words).
@@ -84,9 +89,9 @@
     -->
     <PropertyGroup>
         <DdbSource>release</DdbSource>
-        <DdbVersion>2.10.0</DdbVersion>
-        <DdbDebSha256>0df9efa8994e41332f3e10bfb41c139068b039ca3738699664bbf73b60e3b0aa</DdbDebSha256>
-        <DdbWindowsZipSha256>cd9417532ed0348bfe038e1ee554084d27312e66dc2bb59e8977d8490165bb60</DdbWindowsZipSha256>
+        <DdbVersion>2.11.0</DdbVersion>
+        <DdbDebSha256>bee550dcd06f62e9a45c86b8231d29c8c46157b53ddfaad570291bc990a8589a</DdbDebSha256>
+        <DdbWindowsZipSha256>0fcfc218f5c087dd8953a6612c24f2bec03db7715464dd281f25fcdd07c0888a</DdbWindowsZipSha256>
     </PropertyGroup>
 
 </Project>
