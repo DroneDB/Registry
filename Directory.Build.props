@@ -60,8 +60,12 @@
                    request merge commit for a PR run), e.g. ddb_2.0.0~git1813815_amd64.deb next to
                    ddb-2.0.0-Windows.zip. Remove the property with the move to the release.
 
-        Pinned now (2026-11-24): the DroneDB v2.11.0 release (ABI 2.11; the handshake requires ABI 2.11:
-        DdbAbi.Minor 11). 2.11.0 lists the formulas of a raster with its raster info, without its statistics;
+        Pinned now (2026-11-24): the DroneDB v2.12.0 release (ABI 2.12; the handshake requires ABI 2.12:
+        DdbAbi.Minor 12). 2.12.0 counts the statistics of the uploaded file of a GeoRaster in its COG build
+        (the sourceStatistics member of the raster.cog artifact, which DDBBuildRasterStatistics also writes for an
+        older build) and gives the value info of an entry with them (DDBGetRasterValueInfoEx2), so the first value
+        info of a built raster reads no pixel.
+        2.11.0 lists the formulas of a raster with its raster info, without its statistics;
         computes the exact statistics of a raster in one parallel pass of ddb-tilers 0.14.0 (ddbtRasterStatistics);
         says whether the COG of a built GeoRaster has its statistics next to it (the statistics member of the
         raster.cog artifact) and writes them on request (DDBBuildRasterStatistics), which the nightly completeness
@@ -89,9 +93,9 @@
     -->
     <PropertyGroup>
         <DdbSource>release</DdbSource>
-        <DdbVersion>2.11.0</DdbVersion>
-        <DdbDebSha256>bee550dcd06f62e9a45c86b8231d29c8c46157b53ddfaad570291bc990a8589a</DdbDebSha256>
-        <DdbWindowsZipSha256>0fcfc218f5c087dd8953a6612c24f2bec03db7715464dd281f25fcdd07c0888a</DdbWindowsZipSha256>
+        <DdbVersion>2.12.0</DdbVersion>
+        <DdbDebSha256>ac20163e1dd044cc01217543e6af867d00ed0c4ac174f361984669540427261a</DdbDebSha256>
+        <DdbWindowsZipSha256>4531f3c3e336e370b2160a3d7d1c79d66feaa8b47444df00a43800c5c11f7cdd</DdbWindowsZipSha256>
     </PropertyGroup>
 
 </Project>
