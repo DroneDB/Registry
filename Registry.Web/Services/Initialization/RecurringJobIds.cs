@@ -16,6 +16,7 @@ public static class RecurringJobIds
     public const string CleanupOrphanedDatasets = "cleanup-orphaned-datasets";
     public const string CleanupOldJobIndices = "cleanup-old-jobindices";
     public const string RecurringDatasetCleanup = "recurring-dataset-cleanup";
+    public const string CleanupCache = "cleanup-cache";
     public const string CheckArtifactCompleteness = "check-artifact-completeness";
     public const string IndexReconciliation = "index-reconciliation";
     public const string CheckUpdates = "check-updates";
@@ -31,6 +32,7 @@ public static class RecurringJobIds
         CleanupOrphanedDatasets,
         CleanupOldJobIndices,
         RecurringDatasetCleanup,
+        CleanupCache,
         CheckArtifactCompleteness,
         IndexReconciliation,
         CheckUpdates,

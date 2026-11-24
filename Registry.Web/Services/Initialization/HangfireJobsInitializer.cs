@@ -117,6 +117,13 @@ internal sealed class HangfireJobsInitializer : IStartupTask
                 service => service.CleanupAllDatasetsAsync(null, CancellationToken.None),
                 cron));
 
+        ScheduleJob(recurringJobManager, RecurringJobIds.CleanupCache,
+            CronSetting.Resolve(appSettings.CacheCleanupCron, JobScheduleOptions.DefaultCrons.CacheCleanupCron),
+            cron => recurringJobManager.AddOrUpdate<RecurringCacheCleanupService>(
+                RecurringJobIds.CleanupCache,
+                service => service.CleanupCache(null, CancellationToken.None),
+                cron));
+
         ScheduleJob(recurringJobManager, RecurringJobIds.CheckArtifactCompleteness,
             CronSetting.Resolve(appSettings.ArtifactCompletenessCheckerCron, JobScheduleOptions.DefaultCrons.ArtifactCompletenessCheckerCron),
             cron => recurringJobManager.AddOrUpdate<ArtifactCompletenessCheckerService>(

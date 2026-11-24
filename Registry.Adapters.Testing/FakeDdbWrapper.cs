@@ -392,6 +392,9 @@ public class FakeDdbWrapper : IDdbWrapper
         BuildOptions? options, Action<double, string?>? progress) => throw Unsupported();
 
     public virtual DdbCleanupResult Cleanup(string ddbPath) => throw Unsupported();
+
+    public virtual CacheCleanupResult CleanupCache(CacheCleanupOptions? options, CancellationToken cancellationToken) =>
+        throw Unsupported();
     public virtual List<RescanResult> RescanIndex(string ddbPath, RescanOptions? options = null) => throw Unsupported();
 
     public virtual List<CoverageResult> FindCoverage(string ddbPath, string geometryGeoJson, int? limit = null) =>

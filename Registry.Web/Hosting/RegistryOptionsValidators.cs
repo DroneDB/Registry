@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Net;
 using Microsoft.Extensions.Options;
+using Registry.Ports.DroneDB;
 using Registry.Web.Models.Configuration;
 using Registry.Web.Models.Email;
 
@@ -125,6 +126,25 @@ internal sealed class ShareOptionsValidator : IValidateOptions<ShareOptions>
         .Check(options.RandomDatasetNameLength >= 8,
             $"{OptionsFailures.Key(nameof(ShareOptions.RandomDatasetNameLength))} is not valid (must be at least 8)")
         .Result();
+}
+
+/// <summary>
+/// The ages of the cache cleanup: libddb accepts whole days from 0 to <see cref="CacheCleanupOptions.MaxDays"/> and
+/// refuses the whole cleanup for any other, so a wrong value stops the start instead of failing every night.
+/// </summary>
+internal sealed class JobScheduleOptionsValidator : IValidateOptions<JobScheduleOptions>
+{
+    public ValidateOptionsResult Validate(string? name, JobScheduleOptions options) => new OptionsFailures()
+        .Check(IsCacheAge(options.CacheCleanupTileDays), CacheAgeFailure(nameof(JobScheduleOptions.CacheCleanupTileDays)))
+        .Check(IsCacheAge(options.CacheCleanupDownloadDays), CacheAgeFailure(nameof(JobScheduleOptions.CacheCleanupDownloadDays)))
+        .Check(IsCacheAge(options.CacheCleanupDsmDays), CacheAgeFailure(nameof(JobScheduleOptions.CacheCleanupDsmDays)))
+        .Check(IsCacheAge(options.CacheCleanupTempDays), CacheAgeFailure(nameof(JobScheduleOptions.CacheCleanupTempDays)))
+        .Result();
+
+    private static bool IsCacheAge(int days) => days is >= 0 and <= CacheCleanupOptions.MaxDays;
+
+    private static string CacheAgeFailure(string key) =>
+        $"{OptionsFailures.Key(key)} is not valid (must be between 0 and {CacheCleanupOptions.MaxDays} days)";
 }
 
 /// <summary>The keys of <c>AppSettings:HostBudget</c> (a new section, so new rules break nothing).</summary>

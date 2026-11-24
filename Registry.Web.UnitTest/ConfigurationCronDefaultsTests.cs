@@ -39,7 +39,8 @@ public class ConfigurationCronDefaultsTests
             ["OrphanedDatasetCleanupCron"] = "0 3 * * *",
             ["DatasetCleanupCron"] = "0 0 * * *",
             ["ArtifactCompletenessCheckerCron"] = "0 2 * * *",
-            ["JobIndexCleanupCron"] = "0 4 * * *"
+            ["JobIndexCleanupCron"] = "0 4 * * *",
+            ["CacheCleanupCron"] = "30 4 * * *"
         }, ignoreOrder: true);
     }
 }

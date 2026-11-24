@@ -11,6 +11,13 @@ public sealed class JobScheduleOptions
     public const int DefaultHangfireJobRetentionDays = 2;
     public const int DefaultHangfireInvisibilityTimeoutHours = 4;
 
+    // The ages of the cache cleanup: libddb's own defaults, so the job removes what a tile request's occasional
+    // cleanup would, only every night instead of one request in a thousand
+    public const int DefaultCacheCleanupTileDays = 5;
+    public const int DefaultCacheCleanupDownloadDays = 7;
+    public const int DefaultCacheCleanupDsmDays = 30;
+    public const int DefaultCacheCleanupTempDays = 2;
+
     /// <summary>
     /// The schedule of each recurring job whose cron is left empty, one constant per cron setting with the
     /// setting's name: the shipped settings files leave them unset, so these are the schedules a deployment runs.
@@ -26,6 +33,10 @@ public sealed class JobScheduleOptions
         public const string ArtifactCompletenessCheckerCron = "0 2 * * *";
         public const string JobIndexCleanupCron = "0 4 * * *";
         public const string IndexReconciliationCron = "0 * * * *";
+
+        // Half past four: the last nightly sweep that walks the disk starts at 3:00 (orphaned folders) and the one at
+        // 4:00 only touches the database, and minute 30 misses the hourly jobs
+        public const string CacheCleanupCron = "30 4 * * *";
     }
 
     /// <summary>Cleanup of expired Hangfire jobs. Default: "0 0 * * *" (daily at midnight).</summary>
@@ -70,6 +81,31 @@ public sealed class JobScheduleOptions
     /// entries missing on disk, ages out quarantined files. Default: "0 * * * *" (hourly).
     /// </summary>
     public string? IndexReconciliationCron { get; set; }
+
+    /// <summary>
+    /// Cleanup of libddb's cache and of its folders in the temporary folder: rendered tiles, downloaded copies of
+    /// remote rasters, DSM tiles and what interrupted requests left, each past its age below. Default: "30 4 * * *"
+    /// (daily at 4:30).
+    /// </summary>
+    public string? CacheCleanupCron { get; set; }
+
+    /// <summary>Days after their last change the folders of rendered tiles are removed (0 to 36500). Default: 5.</summary>
+    public int CacheCleanupTileDays { get; set; } = DefaultCacheCleanupTileDays;
+
+    /// <summary>
+    /// Days after their last change the copies of remote rasters that tile requests downloaded are removed (0 to
+    /// 36500). Default: 7.
+    /// </summary>
+    public int CacheCleanupDownloadDays { get; set; } = DefaultCacheCleanupDownloadDays;
+
+    /// <summary>Days after their last change the elevation tiles of the DSM service are removed (0 to 36500). Default: 30.</summary>
+    public int CacheCleanupDsmDays { get; set; } = DefaultCacheCleanupDsmDays;
+
+    /// <summary>
+    /// Days after their last change the folders a crashed or interrupted libddb request left (in the cache and in the
+    /// temporary folder) are removed (0 to 36500). Default: 2.
+    /// </summary>
+    public int CacheCleanupTempDays { get; set; } = DefaultCacheCleanupTempDays;
 
     /// <summary>Days terminal (Succeeded/Failed/Deleted) JobIndex records are kept. Default: 60.</summary>
     public int JobIndexRetentionDays { get; set; } = DefaultJobIndexRetentionDays;

@@ -24,7 +24,7 @@ public static class DdbAbi
     public const int Major = 2;
 
     /// <summary>
-    /// <c>DDB_ABI_MINOR</c> Registry needs at least: 12 (DroneDB 2.12.0). ABI 2.4 brought the output options of align,
+    /// <c>DDB_ABI_MINOR</c> Registry needs at least: 13 (DroneDB 2.13.0). ABI 2.4 brought the output options of align,
     /// merge multispectral and mask borders (<c>DDBAlignRasterEx</c>, <c>DDBMergeMultispectralEx</c>,
     /// <c>DDBMaskBordersEx</c>), the raster value exports with a <c>DDBRasterOptions</c> (with the unit of the rescale,
     /// <c>rescaleUnit</c>), the build key (<c>key</c>, <c>buildKey</c>, <c>buildKeyChanged</c>, the key argument of
@@ -40,11 +40,13 @@ public static class DdbAbi
     /// the <c>statistics</c> member of its artifact, the formulas of <c>DDBGetRasterInfo</c>); ABI 2.12 adds
     /// <c>DDBGetRasterValueInfoEx2</c>, the value info of the file of an entry with the statistics its COG build counted
     /// in it (and the <c>sourceStatistics</c> member of the artifact of the COG, which
-    /// <c>DDBBuildRasterStatistics</c> writes too).
-    /// Every export <see cref="NativeDdb"/> declares is in ABI 2.12; an older libddb is refused, so no code path depends
+    /// <c>DDBBuildRasterStatistics</c> writes too); ABI 2.13 adds <c>DDBCleanupCache</c>, the removal of what the cache
+    /// and the temporary folder kept past an age, which the Registry runs once a day (libddb keeps no artefact cache from
+    /// 2.13: the setting <c>artefactCacheMb</c> is still accepted and has no effect).
+    /// Every export <see cref="NativeDdb"/> declares is in ABI 2.13; an older libddb is refused, so no code path depends
     /// on the ABI minor.
     /// </summary>
-    public const int Minor = 12;
+    public const int Minor = 13;
 
     private const string Library = "ddb";
 

@@ -411,6 +411,39 @@ public class NativeDdbWrapper : IDdbWrapper
         NativeCall.Invoke<DdbCleanupResult>(nameof(NativeDdb.DDBCleanup),
             (out IntPtr output) => NativeDdb.DDBCleanup(ddbPath, out output));
 
+    public CacheCleanupResult CleanupCache(CacheCleanupOptions? options, CancellationToken cancellationToken)
+    {
+        var optionsJson = ToCacheCleanupJson(options);
+
+        // libddb reads the token of the calling thread between the entries it removes
+        using var cancellation = DdbCancellation.Enter(cancellationToken);
+        return NativeCall.Invoke<CacheCleanupResult>(nameof(NativeDdb.DDBCleanupCache),
+            (out IntPtr output) => NativeDdb.DDBCleanupCache(optionsJson, out output));
+    }
+
+    /// <summary>
+    /// The <c>DDBCleanupCache</c> JSON of <paramref name="options"/>: only the members that are set (libddb refuses a
+    /// null), <c>dryRun</c> only when true, null for none (libddb's defaults).
+    /// </summary>
+    public static string? ToCacheCleanupJson(CacheCleanupOptions? options)
+    {
+        if (options is not { } o)
+            return null;
+
+        var json = new JsonObject();
+        if (o.TileDays is { } tiles)
+            json["tileDays"] = tiles;
+        if (o.DownloadDays is { } downloads)
+            json["downloadDays"] = downloads;
+        if (o.DsmDays is { } dsm)
+            json["dsmDays"] = dsm;
+        if (o.TempDays is { } temp)
+            json["tempDays"] = temp;
+        if (o.DryRun)
+            json["dryRun"] = true;
+        return json.Count == 0 ? null : json.ToJsonString(NativeJson.Options);
+    }
+
     // ---------------------------------------------------------------- meta
 
     public Meta MetaAdd(string ddbPath, string key, string data, string? path = null) =>

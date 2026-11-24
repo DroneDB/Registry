@@ -268,6 +268,51 @@
       "mediaType": null
     }
   },
+  "Registry.Ports.DroneDB.CacheCleanupCount": {
+    "full": {
+      "entries": 1234567890123,
+      "bytes": 1234567890123
+    },
+    "sparse": {
+      "entries": 0,
+      "bytes": 0
+    }
+  },
+  "Registry.Ports.DroneDB.CacheCleanupOptions": {
+    "full": {
+      "tileDays": 42,
+      "downloadDays": 42,
+      "dsmDays": 42,
+      "tempDays": 42,
+      "dryRun": true
+    },
+    "sparse": {
+      "tileDays": null,
+      "downloadDays": null,
+      "dsmDays": null,
+      "tempDays": null,
+      "dryRun": false
+    }
+  },
+  "Registry.Ports.DroneDB.CacheCleanupResult": {
+    "full": {
+      "dryRun": true,
+      "kinds": {
+        "Alpha": {
+          "entries": 1234567890123,
+          "bytes": 1234567890123
+        },
+        "snake_Key": {
+          "entries": 1234567890123,
+          "bytes": 1234567890123
+        }
+      }
+    },
+    "sparse": {
+      "dryRun": false,
+      "kinds": null
+    }
+  },
   "Registry.Ports.DroneDB.CopiedBuildArtifacts": {
     "full": {
       "hash": "Hash-text",

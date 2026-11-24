@@ -194,6 +194,14 @@ internal static unsafe partial class NativeDdb
     [LibraryImport(Library, StringMarshalling = StringMarshalling.Utf8)]
     internal static partial DdbResult DDBCleanup(string ddbPath, out IntPtr output);
 
+    /// <summary>
+    /// Removes what the cache and the temporary folder kept past an age (ABI 2.13): <paramref name="optionsJson"/> is
+    /// null or <c>{"tileDays", "downloadDays", "dsmDays", "tempDays", "dryRun"}</c>, the output
+    /// <c>{"dryRun", "kinds": {kind: {"entries", "bytes"}}}</c>. It honours the cancel token of the calling thread.
+    /// </summary>
+    [LibraryImport(Library, StringMarshalling = StringMarshalling.Utf8)]
+    internal static partial DdbResult DDBCleanupCache(string? optionsJson, out IntPtr output);
+
     /// <summary>Deprecated in libddb 2.x (no other dataset-wide pending query yet).</summary>
     [LibraryImport(Library, StringMarshalling = StringMarshalling.Utf8)]
     internal static partial DdbResult DDBIsBuildPending(string ddbPath,

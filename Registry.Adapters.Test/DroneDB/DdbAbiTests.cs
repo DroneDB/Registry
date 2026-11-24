@@ -6,10 +6,10 @@ namespace Registry.Adapters.Test.DroneDB;
 
 /// <summary>
 /// The ABI rule of the startup handshake. DroneDB has one version and the ABI follows it, so
-/// Registry runs on libddb 2.x from 2.12 (ABI major 2, minor at least 12: every export it calls since 2.4, the
+/// Registry runs on libddb 2.x from 2.13 (ABI major 2, minor at least 13: every export it calls since 2.4, the
 /// DDBConfigure setting artefactCacheMb of 2.6, DDBRescanEx2 of 2.9, DDBFindCoverage of 2.10,
-/// DDBBuildRasterStatistics of 2.11 and DDBGetRasterValueInfoEx2 of 2.12) and refuses a 1.x, 2.0 or any 2.x before
-/// 2.12 (2.4 to 2.11 included)
+/// DDBBuildRasterStatistics of 2.11, DDBGetRasterValueInfoEx2 of 2.12 and DDBCleanupCache of 2.13) and refuses a 1.x,
+/// 2.0 or any 2.x before 2.13 (2.4 to 2.12 included)
 /// with a message that says which library it needs.
 /// </summary>
 [TestFixture]
@@ -17,12 +17,12 @@ public class DdbAbiTests
 {
     private static uint Abi(int major, int minor) => (uint)((major << 16) | minor);
 
-    [TestCase(2, 12)]
     [TestCase(2, 13)]
+    [TestCase(2, 14)]
     [TestCase(2, 17)]
-    public void RequireAbi_AcceptsLibddb2x_From212(int major, int minor)
+    public void RequireAbi_AcceptsLibddb2x_From213(int major, int minor)
     {
-        DdbAbi.RequireAbi("2.12.0", Abi(major, minor)).ShouldBe((major, minor));
+        DdbAbi.RequireAbi("2.13.0", Abi(major, minor)).ShouldBe((major, minor));
     }
 
     [TestCase("2.0.1", 0)]
@@ -37,12 +37,13 @@ public class DdbAbiTests
     [TestCase("2.9.0", 9)]
     [TestCase("2.10.0", 10)]
     [TestCase("2.11.0", 11)]
+    [TestCase("2.12.0", 12)]
     public void RequireAbi_RejectsAnOlderMinor_NamingTheMinorItNeeds(string version, int minor)
     {
         var ex = Should.Throw<DdbAbiMismatchException>(() => DdbAbi.RequireAbi(version, Abi(2, minor)));
 
         ex.Message.ShouldContain($"libddb {version} has ABI 2.{minor}");
-        ex.Message.ShouldContain("(ABI 2.x with x >= 12)");
+        ex.Message.ShouldContain("(ABI 2.x with x >= 13)");
     }
 
     [TestCase(1, 0)]
@@ -63,8 +64,8 @@ public class DdbAbiTests
     public void Decode_SplitsMajorAndMinor()
     {
         DdbAbi.Decode(Abi(2, 0)).ShouldBe((2, 0));
-        DdbAbi.Decode(Abi(2, 12)).ShouldBe((2, 12));
+        DdbAbi.Decode(Abi(2, 13)).ShouldBe((2, 13));
         DdbAbi.Major.ShouldBe(2);
-        DdbAbi.Minor.ShouldBe(12);
+        DdbAbi.Minor.ShouldBe(13);
     }
 }

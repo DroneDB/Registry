@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using Registry.Ports.DroneDB;
 using Registry.Web.Models.Configuration;
 using Registry.Web.Models.DTO;
 using static Registry.Web.Services.Configuration.ConfigurationFields;
@@ -20,6 +21,12 @@ public sealed class JobScheduleSections : IConfigurationSectionBuilder
     [
         new(ConfigurationSection.CronJobs, BuildCronJobsSection())
     ];
+
+    /// <summary>An age of the cache cleanup: whole days, in the range libddb accepts.</summary>
+    private static ConfigurationFieldDataDto CacheAgeField(string key, string displayName, string description,
+        int currentValue, int defaultValue) =>
+        NumberField(key, displayName, $"{description} 0 removes them at every run.", currentValue, defaultValue,
+            minValue: 0, maxValue: CacheCleanupOptions.MaxDays, unit: "days");
 
     private ConfigurationSectionDataDto BuildCronJobsSection()
     {
@@ -61,6 +68,26 @@ public sealed class JobScheduleSections : IConfigurationSectionBuilder
                 StringField("JobIndexCleanupCron", "Job Index Cleanup Cron",
                     $"Cron expression for purging old terminal JobIndex records. Default: '{Default.JobIndexCleanupCron}' (daily at 4 AM).",
                     jobs.JobIndexCleanupCron, Default.JobIndexCleanupCron, "cron"),
+
+                StringField("CacheCleanupCron", "Cache Cleanup Cron",
+                    $"Cron expression for removing old libddb cache entries (rendered tiles, downloaded rasters, DSM tiles, leftover temporary folders). Default: '{Default.CacheCleanupCron}' (daily at 4:30 AM).",
+                    jobs.CacheCleanupCron, Default.CacheCleanupCron, "cron"),
+
+                CacheAgeField("CacheCleanupTileDays", "Cache Cleanup: Tiles (days)",
+                    "Days after their last change the folders of rendered map tiles are removed.",
+                    jobs.CacheCleanupTileDays, jobsDefault.CacheCleanupTileDays),
+
+                CacheAgeField("CacheCleanupDownloadDays", "Cache Cleanup: Downloads (days)",
+                    "Days after their last change the copies of remote rasters downloaded for map tiles are removed.",
+                    jobs.CacheCleanupDownloadDays, jobsDefault.CacheCleanupDownloadDays),
+
+                CacheAgeField("CacheCleanupDsmDays", "Cache Cleanup: DSM Tiles (days)",
+                    "Days after their last change the elevation tiles of the DSM service are removed.",
+                    jobs.CacheCleanupDsmDays, jobsDefault.CacheCleanupDsmDays),
+
+                CacheAgeField("CacheCleanupTempDays", "Cache Cleanup: Temporary Folders (days)",
+                    "Days after their last change the folders that crashed or interrupted libddb requests left are removed.",
+                    jobs.CacheCleanupTempDays, jobsDefault.CacheCleanupTempDays),
 
                 NumberField("JobIndexRetentionDays", "Job Index Retention (days)",
                     "Number of days to keep terminal (Succeeded/Failed/Deleted) JobIndex records.",

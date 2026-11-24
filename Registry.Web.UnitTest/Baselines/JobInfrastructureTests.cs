@@ -300,7 +300,7 @@ public class JobInfrastructureTests
     private static readonly Type[] RecurringServices =
     [
         typeof(JobIndexSyncService), typeof(BuildPendingService), typeof(OrphanedDatasetCleanupService),
-        typeof(JobIndexCleanupService), typeof(RecurringDatasetCleanupService),
+        typeof(JobIndexCleanupService), typeof(RecurringDatasetCleanupService), typeof(RecurringCacheCleanupService),
         typeof(ArtifactCompletenessCheckerService), typeof(IndexReconciliationService)
     ];
 

@@ -330,6 +330,32 @@ public class ConfigurationCompatibilityTests
             .ShouldBeEmpty();
     }
 
+    /// <summary>The ages of the cache cleanup are whole days libddb accepts: 0 to 36500, anything else stops the start.</summary>
+    [TestCase("CacheCleanupTileDays", "-1")]
+    [TestCase("CacheCleanupDownloadDays", "36501")]
+    [TestCase("CacheCleanupDsmDays", "-30")]
+    [TestCase("CacheCleanupTempDays", "100000")]
+    public void ACacheCleanupAgeOutOfRange_IsAValidatorRule(string key, string value)
+    {
+        var settings = Values(Load("docker/testing/appsettings-testing.json"));
+        settings["AppSettings:" + key] = value;
+
+        RegistryOptions.Validate(new ConfigurationBuilder().AddInMemoryCollection(settings).Build(), InstanceType.WebServer)
+            .ShouldHaveSingleItem().ShouldBe($"AppSettings:{key} is not valid (must be between 0 and 36500 days)");
+    }
+
+    [TestCase("0")]
+    [TestCase("36500")]
+    public void TheBoundsOfTheCacheCleanupAges_AreValid(string value)
+    {
+        var settings = Values(Load("docker/testing/appsettings-testing.json"));
+        foreach (var key in new[] { "CacheCleanupTileDays", "CacheCleanupDownloadDays", "CacheCleanupDsmDays", "CacheCleanupTempDays" })
+            settings["AppSettings:" + key] = value;
+
+        RegistryOptions.Validate(new ConfigurationBuilder().AddInMemoryCollection(settings).Build(), InstanceType.WebServer)
+            .ShouldBeEmpty();
+    }
+
     /// <summary>The testing settings with a complete, enabled SMTP section.</summary>
     private static Dictionary<string, string?> EnabledSmtp()
     {

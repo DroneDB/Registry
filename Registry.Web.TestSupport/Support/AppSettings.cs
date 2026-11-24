@@ -310,6 +310,25 @@ public class AppSettings
     public string? ArtifactCompletenessCheckerCron { get; set; }
 
     /// <summary>
+    /// Cron expression for the cleanup of libddb's cache and of its folders in the temporary folder.
+    /// Default (when null, empty, or omitted): "30 4 * * *" (daily at 4:30 AM).
+    /// Set to "disabled", "off", or "none" to remove the job.
+    /// </summary>
+    public string? CacheCleanupCron { get; set; }
+
+    /// <summary>Days after their last change the folders of rendered tiles are removed. Default: 5.</summary>
+    public int CacheCleanupTileDays { get; set; } = JobScheduleOptions.DefaultCacheCleanupTileDays;
+
+    /// <summary>Days after their last change the downloaded copies of remote rasters are removed. Default: 7.</summary>
+    public int CacheCleanupDownloadDays { get; set; } = JobScheduleOptions.DefaultCacheCleanupDownloadDays;
+
+    /// <summary>Days after their last change the elevation tiles of the DSM service are removed. Default: 30.</summary>
+    public int CacheCleanupDsmDays { get; set; } = JobScheduleOptions.DefaultCacheCleanupDsmDays;
+
+    /// <summary>Days after their last change libddb's leftover request and temporary folders are removed. Default: 2.</summary>
+    public int CacheCleanupTempDays { get; set; } = JobScheduleOptions.DefaultCacheCleanupTempDays;
+
+    /// <summary>
     /// Cron expression for job index cleanup task (removes old terminal records).
     /// Default (when null, empty, or omitted): "0 4 * * *" (daily at 4:00 AM).
     /// Set to "disabled", "off", or "none" to remove the job.

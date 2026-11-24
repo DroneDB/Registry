@@ -19,6 +19,7 @@ namespace Registry.Ports.Json;
 [JsonSerializable(typeof(BatchAddResult))]
 [JsonSerializable(typeof(BatchAddedEntry))]
 [JsonSerializable(typeof(BuildArtifact))]
+[JsonSerializable(typeof(CacheCleanupResult))]
 [JsonSerializable(typeof(CopiedBuildArtifacts))]
 [JsonSerializable(typeof(DdbCleanupResult))]
 [JsonSerializable(typeof(CoverageResult))]

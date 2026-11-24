@@ -93,17 +93,17 @@ public class NativeDdbDeclarationTests
     }
 
     /// <summary>
-    /// libddb 2.12 is the only libddb the Registry runs: every export it calls since 2.0 is required by the startup
-    /// handshake (ABI 2.12), with no optional export and no fallback for an older library: the Ex variants of align, merge
+    /// libddb 2.13 is the only libddb the Registry runs: every export it calls since 2.0 is required by the startup
+    /// handshake (ABI 2.13), with no optional export and no fallback for an older library: the Ex variants of align, merge
     /// and mask, the raster value exports with a <c>DDBRasterOptions</c>, the renders and the export with options
     /// (U-202, U-406), the build and the contours with progress (FR-PRC-42, U-413), the visualization tile encoded
     /// by libddb in the format asked for (<c>DDBMemoryTileEx3</c>, ABI 2.5), the only tile-ex export Registry calls, and
     /// the region and index renders with options (<c>DDBRenderRasterRegionEx2</c>, <c>DDBRenderRasterIndexEx</c>).
     /// </summary>
     [Test]
-    public void TheExportsOfLibddb_AreRequired_WithTheRequiredAbi212()
+    public void TheExportsOfLibddb_AreRequired_WithTheRequiredAbi213()
     {
-        DdbAbi.Minor.ShouldBe(12);
+        DdbAbi.Minor.ShouldBe(13);
         DdbAbi.RequiredSymbols.ShouldContain("DDBBuildEx2");
         DdbAbi.RequiredSymbols.ShouldContain("DDBGenerateContoursEx2");
         DdbAbi.RequiredSymbols.ShouldContain("DDBExportRaster3");
@@ -130,6 +130,8 @@ public class NativeDdbDeclarationTests
         DdbAbi.RequiredSymbols.ShouldContain("DDBBuildRasterStatistics");
         // ABI 2.12: the value info of the file of an entry, with the statistics its COG build counted in it
         DdbAbi.RequiredSymbols.ShouldContain("DDBGetRasterValueInfoEx2");
+        // ABI 2.13: the removal of what the cache and the temporary folder kept past an age
+        DdbAbi.RequiredSymbols.ShouldContain("DDBCleanupCache");
         typeof(NativeDdb).Assembly.GetType("Registry.Adapters.DroneDB.NativeDdbOptional").ShouldBeNull();
         typeof(NativeDdbWrapper).GetProperty("BuildProgressSupported",
             BindingFlags.Static | BindingFlags.NonPublic | BindingFlags.Public).ShouldBeNull();
@@ -170,6 +172,20 @@ public class NativeDdbDeclarationTests
         NativeDdbWrapper.ToTrainingJson(new Ports.DroneDB.SplatTrainingOptions(MaxPoints: 0)).ShouldBe("""{"maxPoints":0}""");
         NativeDdbWrapper.ToTrainingJson(new Ports.DroneDB.SplatTrainingOptions(1600, 50000))
             .ShouldBe("""{"maxImageSize":1600,"maxPoints":50000}""");
+    }
+
+    [Test]
+    public void CacheCleanupJson_SendsOnlyTheOptionsThatAreSet()
+    {
+        NativeDdbWrapper.ToCacheCleanupJson(null).ShouldBeNull();
+        NativeDdbWrapper.ToCacheCleanupJson(new Ports.DroneDB.CacheCleanupOptions()).ShouldBeNull();
+        // 0 is an age (every entry goes), not "unset"; libddb refuses a null, so an unset age is left out
+        NativeDdbWrapper.ToCacheCleanupJson(new Ports.DroneDB.CacheCleanupOptions(TileDays: 0))
+            .ShouldBe("""{"tileDays":0}""");
+        NativeDdbWrapper.ToCacheCleanupJson(new Ports.DroneDB.CacheCleanupOptions(DryRun: true))
+            .ShouldBe("""{"dryRun":true}""");
+        NativeDdbWrapper.ToCacheCleanupJson(new Ports.DroneDB.CacheCleanupOptions(5, 7, 30, 2, true))
+            .ShouldBe("""{"tileDays":5,"downloadDays":7,"dsmDays":30,"tempDays":2,"dryRun":true}""");
     }
 
     [Test]

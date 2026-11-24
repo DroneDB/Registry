@@ -171,6 +171,19 @@ public interface IDdbWrapper
     /// <returns>Lists of removed entry paths and build artifact hashes</returns>
     public DdbCleanupResult Cleanup(string ddbPath);
 
+    /// <summary>
+    /// Removes what libddb's cache and the temporary folder kept past the ages of <paramref name="options"/>, by the
+    /// last change of each entry (DDBCleanupCache, ABI 2.13): rendered tiles, downloaded copies of remote rasters, DSM
+    /// tiles, request folders no request holds, libddb's folders in the temporary folder, and the artefact cache an
+    /// earlier libddb kept. Process-wide: no dataset is opened. Stops between entries when
+    /// <paramref name="cancellationToken"/> is canceled (<see cref="DdbCanceledException"/>).
+    /// </summary>
+    /// <param name="options">The ages and the dry run; null for libddb's defaults.</param>
+    /// <param name="cancellationToken">Stops the cleanup at its next entry.</param>
+    /// <returns>What was removed (or would be, in a dry run), by kind.</returns>
+    /// <exception cref="DdbInvalidArgumentsException">An age is outside 0 to <see cref="CacheCleanupOptions.MaxDays"/>.</exception>
+    public CacheCleanupResult CleanupCache(CacheCleanupOptions? options, CancellationToken cancellationToken);
+
     public Meta MetaAdd(string ddbPath, string key, string data, string? path = null);
 
     public Meta MetaSet(string ddbPath, string key, string data, string? path = null);

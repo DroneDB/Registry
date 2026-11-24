@@ -74,7 +74,7 @@ public static class RegistryOptions
         Add<StorageOptions, StorageOptionsValidator>(services, configuration);
         Add<CachingOptions, CachingOptionsValidator>(services, configuration);
         Add<HttpHostOptions, HttpHostOptionsValidator>(services, configuration);
-        Add<JobScheduleOptions>(services, configuration);
+        Add<JobScheduleOptions, JobScheduleOptionsValidator>(services, configuration);
         Add<ThumbnailOptions>(services, configuration);
         Add<DownloadOptions>(services, configuration);
         Add<ShareOptions, ShareOptionsValidator>(services, configuration);
