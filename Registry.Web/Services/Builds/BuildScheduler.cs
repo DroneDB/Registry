@@ -115,6 +115,18 @@ public sealed class BuildScheduler
         EnqueueAsync(target, origin, path, hash,
             payload => Enqueue(target.Dataset, path, false, background: true, payload));
 
+    /// <summary>
+    /// Queues the statistics of the COG of the built GeoRaster <paramref name="path"/> (a COG built before libddb wrote
+    /// them next to it): no build, so the dataset is not flagged as having pending builds.
+    /// </summary>
+    /// <returns>The job id.</returns>
+    public async Task<string> QueueRasterStatisticsAsync(BuildTarget target, string path, string? hash,
+        BuildOrigin? origin = null)
+    {
+        var userId = await UserIdAsync(origin);
+        return _jobs.EnqueueRasterStatistics(target.Dataset, path, Payload(target, userId, origin, path, hash));
+    }
+
     /// <summary>Queues a build of the whole dataset (an import, a rescan).</summary>
     /// <returns>The job id.</returns>
     public Task<string> QueueDatasetAsync(BuildTarget target, bool force, BuildOrigin? origin = null) =>

@@ -57,4 +57,22 @@ public class DdbJobDescriptorTests
         DdbJobDescriptor.OfDisplay("DdbJobs.RebuildInBackground")!.Value.IsBackgroundRebuild.ShouldBeTrue();
         DdbJobDescriptor.OfDisplay("DdbJobs.Build")!.Value.IsBackgroundRebuild.ShouldBeFalse();
     }
+
+    /// <summary>
+    /// The statistics of a COG built without them are background work on an entry: the rebuilds queue, waiting without
+    /// showing the entry as building, and not a build of the entry (no pending marker of its own).
+    /// </summary>
+    [Test]
+    public void TheStatisticsJob_IsBackgroundWorkOnAnEntry_NotABuild()
+    {
+        var job = Job.FromExpression<DdbJobs>(j => j.BuildRasterStatistics("org", Guid.NewGuid(), "ortho.tif", null));
+        var descriptor = DdbJobDescriptor.Of(job)!.Value;
+        descriptor.ShouldBe(new DdbJobDescriptor(DdbJobKind.BuildRasterStatistics, "ortho.tif"));
+        descriptor.IsBackgroundRebuild.ShouldBeTrue();
+        descriptor.IsBuild.ShouldBeFalse();
+        descriptor.BuildsEntry.ShouldBeFalse();
+        descriptor.RunsNativeBuild.ShouldBeFalse();
+        DdbJobDescriptor.IsBackgroundRebuildDisplay("DdbJobs.BuildRasterStatistics").ShouldBeTrue();
+        new BuildQueueRoutingFilter((_, _) => false).QueueFor(job).ShouldBe(JobQueues.Rebuilds);
+    }
 }

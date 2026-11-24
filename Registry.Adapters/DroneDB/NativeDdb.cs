@@ -348,6 +348,15 @@ internal static unsafe partial class NativeDdb
         string? optionsJson, delegate* unmanaged[Cdecl]<double, byte*, IntPtr, int> progress, IntPtr progressUserData,
         out IntPtr output);
 
+    /// <summary>
+    /// The exact statistics of the COG of a built GeoRaster written next to it (ABI 2.11): <c>{"status"}</c>.
+    /// <paramref name="optionsJson"/> is null or <c>{"threads": N}</c>; the progress callback is the one of
+    /// <see cref="DDBExportRaster2"/>.
+    /// </summary>
+    [LibraryImport(Library, StringMarshalling = StringMarshalling.Utf8)]
+    internal static partial DdbResult DDBBuildRasterStatistics(string ddbPath, string entryPath, string? optionsJson,
+        delegate* unmanaged[Cdecl]<double, byte*, IntPtr, int> progress, IntPtr progressUserData, out IntPtr output);
+
     /// <summary>The <c>.spz</c> of a splat, in its build folder: <c>{"path", "role", "cached"}</c>.</summary>
     [LibraryImport(Library, StringMarshalling = StringMarshalling.Utf8)]
     internal static partial DdbResult DDBExportSplatSpz(string ddbPath, string entryPath, out IntPtr output);

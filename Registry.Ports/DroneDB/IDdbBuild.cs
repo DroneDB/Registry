@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Threading;
 
 namespace Registry.Ports.DroneDB;
 
@@ -43,6 +44,15 @@ public interface IDdbBuild
     /// again when one of them is added, not on a timer.
     /// </summary>
     bool IsBuildPending();
+
+    /// <summary>
+    /// Writes the exact statistics of the COG of the built GeoRaster <paramref name="path"/> next to it when it has
+    /// none (<c>DDBBuildRasterStatistics</c>): one pass over its pixels on at most <see cref="BuildOptions.Threads"/>
+    /// threads, under the build lock of the entry. Raises <c>DdbBuildInProgressException</c> while a build of the
+    /// entry runs. Stops with <paramref name="cancellationToken"/>.
+    /// </summary>
+    RasterStatisticsStatus BuildRasterStatistics(string path, BuildOptions? options, Action<double, string?>? progress,
+        CancellationToken cancellationToken);
 
     /// <summary>
     /// The build objects of several entries with one native call (<c>DDBGetBuildArtifacts</c>): whether each is buildable, the state of its build and the artifacts that exist, one

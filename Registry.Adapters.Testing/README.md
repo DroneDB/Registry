@@ -228,3 +228,11 @@ when a file is missing or when an unlisted file is added, so the fixtures change
   local (`footprint unavailable: the file's coordinate system ("Site grid") is a local one, with no position on the
   earth`); the 2.10.0 entry of `Contract/README.md` says so. Same field and type, no adapter change; no other fixture,
   schema or vector changed.
+* 2026-11-24: DroneDB `d6b8ce932f500bc4825f535413c1b9b14094555a` (libddb 2.11.0, ABI 2.11, not yet released:
+  `DdbAbi.Minor` 11, the adapter imports `DDBBuildRasterStatistics`, the statistics of a built COG written next to it,
+  and `BuildArtifact.Statistics` reads the `statistics` member of the `raster.cog` artifact). `capabilities` has
+  `abi.minor` 11 and `DDBBuildRasterStatistics` in `symbols` and `cancellable`; `raster-info` has the `algorithms`,
+  `colormaps` and `autoBands` of `raster-metadata` (its schema requires them); `raster-metadata` has the correctly
+  rounded means of the exact sums; `build-artifacts` and `list-entries-ex` have `"statistics"` on the `raster.cog`
+  artifact (`build-artifacts.schema.json`); `Contract/README.md` has the 2.11.0 entry. No other fixture, schema or
+  vector changed.

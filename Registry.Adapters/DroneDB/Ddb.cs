@@ -612,6 +612,15 @@ public class DDB : IDDB
             ex => $"Cannot export the training data of '{folder}': {ex.Message}");
     }
 
+    public RasterStatisticsStatus BuildRasterStatistics(string path, BuildOptions? options,
+        Action<double, string?>? progress, CancellationToken cancellationToken)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(path);
+        return Wrap(() => Wrapper.BuildRasterStatistics(DatasetFolderPath, path.ToDdbPath(), options, progress,
+                cancellationToken),
+            ex => $"Cannot write the statistics of '{path}': {ex.Message}");
+    }
+
     public SplatSpzExport ExportSplatSpz(string entryPath, CancellationToken cancellationToken)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(entryPath);

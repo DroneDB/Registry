@@ -708,6 +708,24 @@ public class NativeDdbWrapper : IDdbWrapper
         return json.ToJsonString(NativeJson.Options);
     }
 
+    public unsafe RasterStatisticsStatus BuildRasterStatistics(string ddbPath, string entryPath, BuildOptions? options,
+        Action<double, string?>? progress, CancellationToken cancellationToken)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(ddbPath);
+        ArgumentException.ThrowIfNullOrWhiteSpace(entryPath);
+        var optionsJson = ToBuildJson(options);
+
+        // As ExportRaster: the callback reports and stops the call, the token stops it at its next checkpoint
+        using var callback = NativeProgressCallback.Create(progress, cancellationToken);
+        using var cancellation = DdbCancellation.Enter(cancellationToken);
+
+        return NativeCall.Invoke<RasterStatisticsResult>(nameof(NativeDdb.DDBBuildRasterStatistics),
+            (out IntPtr output) => NativeProgressCallback.Completed(callback,
+                NativeDdb.DDBBuildRasterStatistics(ddbPath, NormalizeSeparators(entryPath), optionsJson,
+                    callback == null ? null : NativeProgressCallback.FunctionPointer,
+                    callback?.UserData ?? IntPtr.Zero, out output))).Value;
+    }
+
     public SplatSpzExport ExportSplatSpz(string ddbPath, string entryPath, CancellationToken cancellationToken)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(ddbPath);

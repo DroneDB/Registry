@@ -75,6 +75,39 @@ public class DdbJobs : DdbRetriedJob
             BuildOptions.Capped(_budget.Processing?.BackgroundRebuildThreads ??
                                 ProcessingBudget.DefaultBackgroundRebuildThreads));
 
+    /// <summary>
+    /// Writes the exact statistics of the COG of the built GeoRaster <paramref name="path"/> next to it: a COG built
+    /// before libddb wrote them has none, and the first request that needs them (Plant Health, the value info, the
+    /// stretch of a non-Byte tile) would read every pixel. One pass over its pixels on the threads of a background
+    /// rebuild, on the rebuilds queue; a COG that has them already is not read.
+    /// </summary>
+    /// <remarks>The retry policy of <see cref="RebuildInBackground"/>: a build of the entry that holds its lock is waited for.</remarks>
+    [AutomaticRetry(Attempts = DdbRetryPolicy.Attempts,
+        DelaysInSeconds = [DdbRetryPolicy.Delay1, DdbRetryPolicy.Delay2, DdbRetryPolicy.Delay3, DdbRetryPolicy.Delay4,
+            DdbRetryPolicy.Delay5],
+        OnAttemptsExceeded = AttemptsExceededAction.Fail,
+        OnlyOn = [typeof(DdbBusyException), typeof(DdbBuildInProgressException)])]
+    public void BuildRasterStatistics(string orgSlug, Guid internalRef, string path, PerformContext? context)
+    {
+        var ddb = _ddbManager.Open(orgSlug, internalRef);
+        var console = JobConsole.For(_logger, context, ddb.DatasetFolderPath);
+        var options = BuildOptions.Capped(_budget.Processing?.BackgroundRebuildThreads ??
+                                          ProcessingBudget.DefaultBackgroundRebuildThreads);
+        console.Debug("Writing the statistics of {Path} on at most {Threads} thread(s)", path, options.Threads);
+
+        var sink = _progress?.Open(context);
+        try
+        {
+            var status = ddb.BuildRasterStatistics(path, options, sink == null ? null : BuildProgress.To(sink),
+                JobCancellation.Of(context));
+            console.Info("Statistics of {Path}: {Status}", path, status);
+        }
+        finally
+        {
+            sink?.CompleteAsync().GetAwaiter().GetResult();
+        }
+    }
+
     // A build job: the build, with its progress in the job's row when libddb reports it (FR-PRC-42)
     private void BuildJob(IDDB ddb, string? path, bool force, PerformContext? context, BuildOptions? options)
     {

@@ -32,6 +32,18 @@ public static class QueueDdbJobs
     }
 
     /// <summary>
+    /// Queues the statistics of the COG of <paramref name="path"/>: work no user waits for, on the rebuilds queue
+    /// (<see cref="DdbJobs.BuildRasterStatistics"/>).
+    /// </summary>
+    /// <returns>The job id.</returns>
+    public static string EnqueueRasterStatistics(this IBackgroundJobsProcessor jobs, DatasetKey dataset, string path,
+        IndexPayload meta)
+    {
+        var (orgSlug, internalRef) = Target(dataset);
+        return jobs.EnqueueIndexed<DdbJobs>(j => j.BuildRasterStatistics(orgSlug, internalRef, path, null), meta);
+    }
+
+    /// <summary>
     /// Queues the pending-build job: scheduled in <paramref name="delay"/> when one is given, else enqueued now.
     /// </summary>
     /// <returns>The job id.</returns>

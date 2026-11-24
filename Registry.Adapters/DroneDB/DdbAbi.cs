@@ -24,7 +24,7 @@ public static class DdbAbi
     public const int Major = 2;
 
     /// <summary>
-    /// <c>DDB_ABI_MINOR</c> Registry needs at least: 10 (DroneDB 2.10.0). ABI 2.4 brought the output options of align,
+    /// <c>DDB_ABI_MINOR</c> Registry needs at least: 11 (DroneDB 2.11.0). ABI 2.4 brought the output options of align,
     /// merge multispectral and mask borders (<c>DDBAlignRasterEx</c>, <c>DDBMergeMultispectralEx</c>,
     /// <c>DDBMaskBordersEx</c>), the raster value exports with a <c>DDBRasterOptions</c> (with the unit of the rescale,
     /// <c>rescaleUnit</c>), the build key (<c>key</c>, <c>buildKey</c>, <c>buildKeyChanged</c>, the key argument of
@@ -36,11 +36,12 @@ public static class DdbAbi
     /// <c>DDBConfigure</c> setting <c>artefactCacheMb</c> (<c>Ddb:ArtefactCacheMb</c>), which an older libddb refuses;
     /// ABI 2.9 adds <c>DDBRescanEx2</c>, the rescan of the entries a list of paths selects (the one rescan export Registry
     /// calls, with or without paths); ABI 2.10 adds <c>DDBFindCoverage</c>, the images whose footprint intersects a
-    /// geometry.
-    /// Every export <see cref="NativeDdb"/> declares is in ABI 2.10; an older libddb is refused, so no code path depends
+    /// geometry; ABI 2.11 adds <c>DDBBuildRasterStatistics</c>, the statistics of a built COG written next to it (and
+    /// the <c>statistics</c> member of its artifact, the formulas of <c>DDBGetRasterInfo</c>).
+    /// Every export <see cref="NativeDdb"/> declares is in ABI 2.11; an older libddb is refused, so no code path depends
     /// on the ABI minor.
     /// </summary>
-    public const int Minor = 10;
+    public const int Minor = 11;
 
     private const string Library = "ddb";
 

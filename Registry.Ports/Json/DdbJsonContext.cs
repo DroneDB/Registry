@@ -36,6 +36,7 @@ namespace Registry.Ports.Json;
 [JsonSerializable(typeof(RasterAnalysisOptions))]
 [JsonSerializable(typeof(RescanResult))]
 [JsonSerializable(typeof(SplatSpzExport))]
+[JsonSerializable(typeof(RasterStatisticsResult))]
 [JsonSerializable(typeof(SplatTrainingExport))]
 [JsonSerializable(typeof(Stamp))]
 [JsonSerializable(typeof(List<CoverageResult>))]

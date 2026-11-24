@@ -60,7 +60,7 @@ public unsafe class LibddbContractTests : TestBase
 
     private const string RootPlaceholder = "<root>";
 
-    // fixtures/build-artifacts.json, copy-build-artifacts.json: the artifact of a built GeoRaster
+    // fixtures/copy-build-artifacts.json: the artifact of a built GeoRaster, as a copy lists it
     private const string CogArtifactJson = """
         {
           "downloadName": "cog.tif",
@@ -68,6 +68,20 @@ public unsafe class LibddbContractTests : TestBase
           "mediaType": "image/tiff; application=geotiff; profile=cloud-optimized",
           "path": "cog/cog.tif",
           "role": "raster.cog",
+          "version": "<volatile>"
+        }
+        """;
+
+    // fixtures/build-artifacts.json: the same artifact in the build manifest, which says that the COG has its
+    // statistics next to it (the build writes them)
+    private const string BuiltCogArtifactJson = """
+        {
+          "downloadName": "cog.tif",
+          "kind": "file",
+          "mediaType": "image/tiff; application=geotiff; profile=cloud-optimized",
+          "path": "cog/cog.tif",
+          "role": "raster.cog",
+          "statistics": true,
           "version": "<volatile>"
         }
         """;
@@ -192,7 +206,7 @@ public unsafe class LibddbContractTests : TestBase
     }
 
     /// <summary>
-    /// The loaded libddb is the one the Registry runs (ABI 2.10 or later): it reports the ABI the handshake requires and lists the
+    /// The loaded libddb is the one the Registry runs (ABI 2.11 or later): it reports the ABI the handshake requires and lists the
     /// exports that report progress, which the wrapper always calls.
     /// </summary>
     [Test]
@@ -370,7 +384,7 @@ public unsafe class LibddbContractTests : TestBase
         ShouldEqualJson(WithVolatileVersions(Normalize(artifacts[0], root)), ParseJson($$"""
             {
               "build": {
-                "artifacts": [{{CogArtifactJson}}],
+                "artifacts": [{{BuiltCogArtifactJson}}],
                 "awaitingFiles": false,
                 "buildable": true,
                 "hash": "{{hash}}",
@@ -967,7 +981,7 @@ public unsafe class LibddbContractTests : TestBase
     /// The libddb entry points Registry.Adapters declares: every [DllImport("ddb")] method of the
     /// assembly, the ones LibraryImport generates included.
     /// </summary>
-    // The exports Registry requires (ABI 2.10)
+    // The exports Registry requires (ABI 2.11)
     private static string[] DeclaredExports() =>
         typeof(NativeDdbWrapper).Assembly.GetTypes()
             .SelectMany(t => t.GetMethods(BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic |

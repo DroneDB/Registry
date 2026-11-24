@@ -321,6 +321,14 @@ public interface IDdbWrapper
         System.Threading.CancellationToken cancellationToken);
 
     /// <summary>
+    /// Writes the exact statistics of the COG of the built GeoRaster <paramref name="entryPath"/> next to it when it
+    /// has none (DDBBuildRasterStatistics), on at most <see cref="BuildOptions.Threads"/> threads. Raises
+    /// <c>DdbBuildInProgressException</c> while a build of the entry runs.
+    /// </summary>
+    public RasterStatisticsStatus BuildRasterStatistics(string ddbPath, string entryPath, BuildOptions? options,
+        System.Action<double, string?>? progress, System.Threading.CancellationToken cancellationToken);
+
+    /// <summary>
     /// Makes the <c>.spz</c> of the splat <paramref name="entryPath"/> in the build folder of the entry, or
     /// returns the file that is there (DDBExportSplatSpz). Raises <c>DdbBuildInProgressException</c> while a build
     /// or another export of the entry holds its build lock.

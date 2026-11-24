@@ -449,6 +449,9 @@ public class FakeDdbWrapper : IDdbWrapper
         SplatTrainingOptions? options, Action<double, string?>? progress, CancellationToken cancellationToken) =>
         throw Unsupported();
 
+    public virtual RasterStatisticsStatus BuildRasterStatistics(string ddbPath, string entryPath, BuildOptions? options,
+        Action<double, string?>? progress, CancellationToken cancellationToken) => throw Unsupported();
+
     public virtual SplatSpzExport ExportSplatSpz(string ddbPath, string entryPath,
         CancellationToken cancellationToken) => throw Unsupported();
 

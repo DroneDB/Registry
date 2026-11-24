@@ -252,6 +252,7 @@
       "index": "Index-text",
       "legacy": true,
       "fallbackFor": "FallbackFor-text",
+      "statistics": true,
       "crs": {
         "name": "Name-text",
         "epsg": 42,
@@ -280,6 +281,7 @@
           "index": "Index-text",
           "legacy": true,
           "fallbackFor": "FallbackFor-text",
+          "statistics": true,
           "crs": {
             "name": "Name-text",
             "epsg": 42,
@@ -484,6 +486,7 @@
           "index": "Index-text",
           "legacy": true,
           "fallbackFor": "FallbackFor-text",
+          "statistics": true,
           "crs": {
             "name": "Name-text",
             "epsg": 42,
@@ -536,6 +539,7 @@
             "index": "Index-text",
             "legacy": true,
             "fallbackFor": "FallbackFor-text",
+            "statistics": true,
             "crs": {
               "name": "Name-text",
               "epsg": 42,
@@ -702,6 +706,14 @@
       "bbox": null,
       "rescaleUnit": null,
       "isEmpty": true
+    }
+  },
+  "Registry.Ports.DroneDB.RasterStatisticsResult": {
+    "full": {
+      "status": "Status-text"
+    },
+    "sparse": {
+      "status": null
     }
   },
   "Registry.Ports.DroneDB.RemoveAction": {

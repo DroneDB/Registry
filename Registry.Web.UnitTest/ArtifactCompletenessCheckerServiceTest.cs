@@ -284,6 +284,44 @@ public class ArtifactCompletenessCheckerServiceTest : TestBase
             It.IsAny<IndexPayload>()), Times.Once);
     }
 
+    /// <summary>
+    /// A complete GeoRaster whose COG has no statistics next to it gets the job that writes them (one per entry, never
+    /// a second while one is queued); a COG with them, and a raster whose build is not complete, get none.
+    /// </summary>
+    [Test]
+    public async Task CheckAndQueueAsync_ACogWithoutStatistics_GetsTheirJobOnce()
+    {
+        await using var context = GetTest1Context();
+        var ddb = new Mock<IDDB>();
+        ddb.Setup(x => x.FindSummaries(It.IsAny<EntryQuery>())).Returns([
+            new DdbEntry { Path = "old.tif", Hash = "h-old" },
+            new DdbEntry { Path = "new.tif", Hash = "h-new" },
+            new DdbEntry { Path = "queued.tif", Hash = "h-queued" }
+        ]);
+        ddb.SetupBuilds(CogBuild("old.tif", false), CogBuild("new.tif", true), CogBuild("queued.tif", false));
+        _ddbManagerMock.Setup(x => x.Get(It.IsAny<string>(), It.IsAny<Guid>())).Returns(ddb.Object);
+        AddBuildJob(context, "queued.tif", "h-queued", "Enqueued", DateTime.UtcNow);
+
+        await Service(context).CheckAndQueueAsync(null, CancellationToken.None);
+
+        var enqueued = _backgroundJobMock.Invocations.Where(i => i.Method.Name == "EnqueueIndexed").ToArray();
+        enqueued.Length.ShouldBe(1);
+        var call = enqueued[0].Arguments[0].ShouldBeAssignableTo<Expression<Action<DdbJobs>>>()!;
+        call.Body.ShouldBeAssignableTo<MethodCallExpression>()!.Method.Name.ShouldBe(nameof(DdbJobs.BuildRasterStatistics));
+        var meta = enqueued[0].Arguments[1].ShouldBeOfType<IndexPayload>();
+        meta.Path.ShouldBe("old.tif");
+        meta.Hash.ShouldBe("h-old");
+        meta.UserId.ShouldBe(MagicStrings.AutoBuildServiceUserId);
+    }
+
+    /// <summary>A built GeoRaster whose COG has (or has not) its statistics next to it.</summary>
+    private static EntryBuildArtifacts CogBuild(string path, bool statistics)
+    {
+        var cog = TestBuilds.File(ArtifactRoles.RasterCog, "cog/cog.tif", "image/tiff");
+        cog.Statistics = statistics;
+        return TestBuilds.Build(Folder, path, EntryType.GeoRaster, "h-" + path, BuildState.Complete, cog);
+    }
+
     /// <summary>A model with its bm3d mesh and 3D Tiles, as libddb lists a model built by the current layout.</summary>
     private static EntryBuildArtifacts ModelBuild(string path, BuildState state) =>
         TestBuilds.Build(Folder, path, EntryType.Model, "h-" + path, state,

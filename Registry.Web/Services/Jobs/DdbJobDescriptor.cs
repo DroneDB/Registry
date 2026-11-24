@@ -12,7 +12,8 @@ public enum DdbJobKind
     BuildPending,
     Cleanup,
     MaskBorders,
-    GenerateThumbnail
+    GenerateThumbnail,
+    BuildRasterStatistics
 }
 
 /// <summary>
@@ -73,6 +74,7 @@ public readonly record struct DdbJobDescriptor(DdbJobKind Kind, string? Path)
                 nameof(DdbJobs.Cleanup) => DdbJobKind.Cleanup,
                 nameof(DdbJobs.MaskBorders) => DdbJobKind.MaskBorders,
                 nameof(DdbJobs.GenerateThumbnail) => DdbJobKind.GenerateThumbnail,
+                nameof(DdbJobs.BuildRasterStatistics) => DdbJobKind.BuildRasterStatistics,
                 _ => null
             };
         }
@@ -105,8 +107,11 @@ public readonly record struct DdbJobDescriptor(DdbJobKind Kind, string? Path)
     /// </summary>
     public bool BuildsEntry => Kind is DdbJobKind.Build or DdbJobKind.RebuildInBackground;
 
-    /// <summary>Whether the job is the low-priority build of an entry of an older layout (the rebuilds queue).</summary>
-    public bool IsBackgroundRebuild => Kind is DdbJobKind.RebuildInBackground;
+    /// <summary>
+    /// Whether the job is low-priority work on the build of an entry no user waits for (the rebuilds queue): the build
+    /// of an entry of an older layout, or the statistics of a COG built before libddb wrote them.
+    /// </summary>
+    public bool IsBackgroundRebuild => Kind is DdbJobKind.RebuildInBackground or DdbJobKind.BuildRasterStatistics;
 
     /// <summary>
     /// Whether the job runs a native build inline and so belongs on the builds queue (the background rebuild builds

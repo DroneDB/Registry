@@ -33,6 +33,12 @@ namespace Registry.Web.Services.Adapters;
 /// other incomplete entry is queued on the builds queue. An entry that already has a build job queued, scheduled
 /// or running is left to it.
 /// </para>
+/// <para>
+/// A complete GeoRaster whose COG has no statistics next to it (<see cref="BuildArtifact.Statistics"/> false: a COG
+/// built before libddb wrote them at build time) gets the job that writes them, on the rebuilds queue too
+/// (<see cref="Jobs.DdbJobs.BuildRasterStatistics"/>): without them the first request that needs them reads every
+/// pixel of the raster.
+/// </para>
 /// </summary>
 /// <remarks>
 /// One run at a time across the hosts (the nightly run and the admin trigger of
@@ -95,6 +101,9 @@ public class ArtifactCompletenessCheckerService
                     stats.SkippedNotBuildable + stats.SkippedActive + stats.SkippedComplete + stats.SkippedPending +
                     stats.SkippedBackoff,
                     stats.Queued);
+            if (stats.StatisticsQueued > 0)
+                console.Info("{Dataset}: queued the statistics of {Statistics} COG(s) built without them", ds.Key,
+                    stats.StatisticsQueued);
             if (stats.WaitingTasksRemoved > 0)
                 console.Info("{Dataset}: removed {Removed} task(s) of earlier attempts of builds that wait for files",
                     ds.Key, stats.WaitingTasksRemoved);
@@ -103,10 +112,11 @@ public class ArtifactCompletenessCheckerService
         console.Info("Artifact completeness check completed: {Succeeded}/{Datasets} datasets, scanned {Scanned} entries " +
                      "(not buildable: {NotBuildable}, active: {Active}, complete: {Complete}, pending: {Pending}, " +
                      "backing off after failures: {Backoff}), queued {Queued} rebuild(s), removed {WaitingTasks} task(s) " +
-                     "of earlier attempts of builds that wait for files, {Failed} dataset failure(s)",
+                     "of earlier attempts of builds that wait for files, queued the statistics of {Statistics} COG(s), " +
+                     "{Failed} dataset failure(s)",
             result.Succeeded, result.Datasets, totals.Scanned, totals.SkippedNotBuildable, totals.SkippedActive,
             totals.SkippedComplete, totals.SkippedPending, totals.SkippedBackoff, totals.Queued,
-            totals.WaitingTasksRemoved, result.Failed);
+            totals.WaitingTasksRemoved, totals.StatisticsQueued, result.Failed);
     }
 
     /// <summary>
@@ -148,6 +158,7 @@ public class ArtifactCompletenessCheckerService
         var candidates = new List<EntrySummary>();
         var inBackground = new HashSet<string>(StringComparer.Ordinal);
         var awaitingFiles = new List<EntrySummary>();
+        var withoutStatistics = new List<EntrySummary>();
         var builds = GetBuilds(ddb, entries, key);
 
         foreach (var entry in entries)
@@ -181,6 +192,8 @@ public class ArtifactCompletenessCheckerService
                         continue;
                     case BuildState.Complete:
                         stats.SkippedComplete++;
+                        if (build.Find(ArtifactRoles.RasterCog) is { Statistics: false })
+                            withoutStatistics.Add(entry);
                         continue;
                 }
 
@@ -197,6 +210,7 @@ public class ArtifactCompletenessCheckerService
         }
 
         stats.WaitingTasksRemoved = await KeepOneWaitingTaskAsync(orgSlug, dsSlug, awaitingFiles, ct);
+        stats.StatisticsQueued = await QueueStatisticsAsync(ddb, dataset, dsSlug, key, withoutStatistics, ct);
 
         if (candidates.Count == 0)
             return stats;
@@ -351,6 +365,42 @@ public class ArtifactCompletenessCheckerService
         return removed;
     }
 
+    // The statistics of the COGs that lack them, one job per entry; an entry with a build job (or a statistics job,
+    // which is indexed as a build) queued, scheduled or running is left to it
+    private async Task<int> QueueStatisticsAsync(IDDB ddb, DatasetKey dataset, string dsSlug, string key,
+        List<EntrySummary> entries, CancellationToken ct)
+    {
+        if (entries.Count == 0)
+            return 0;
+
+        var orgSlug = dataset.OrgSlug;
+        var withJob = await _jobIndex.GetActivePathsAsync(orgSlug, dsSlug, HeavyToolIds.Build,
+            entries.Select(e => e.Path).ToArray(), ct);
+        var queued = 0;
+        foreach (var entry in entries)
+        {
+            ct.ThrowIfCancellationRequested();
+            if (withJob.Contains(entry.Path))
+                continue;
+
+            try
+            {
+                await _builds.QueueRasterStatisticsAsync(new BuildTarget(ddb, dataset, orgSlug, dsSlug), entry.Path,
+                    entry.Hash, BuildOrigin.Service);
+                queued++;
+                _logger.LogInformation("Enqueued the statistics of {Key} path={Path} (a COG without them)", key,
+                    entry.Path);
+                await Task.Delay(InterEntryDelayMs, ct);
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException)
+            {
+                _logger.LogWarning(ex, "Failed to enqueue the statistics of {Key} path={Path}", key, entry.Path);
+            }
+        }
+
+        return queued;
+    }
+
     private sealed class DatasetStats
     {
         public int Scanned;
@@ -361,6 +411,7 @@ public class ArtifactCompletenessCheckerService
         public int SkippedBackoff;
         public int Queued;
         public int WaitingTasksRemoved;
+        public int StatisticsQueued;
     }
 
     private sealed class Totals
@@ -373,6 +424,7 @@ public class ArtifactCompletenessCheckerService
         public int SkippedBackoff;
         public int Queued;
         public int WaitingTasksRemoved;
+        public int StatisticsQueued;
 
         public void Add(DatasetStats s)
         {
@@ -384,6 +436,7 @@ public class ArtifactCompletenessCheckerService
             SkippedBackoff += s.SkippedBackoff;
             Queued += s.Queued;
             WaitingTasksRemoved += s.WaitingTasksRemoved;
+            StatisticsQueued += s.StatisticsQueued;
         }
     }
 }
