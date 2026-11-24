@@ -349,7 +349,8 @@ internal static unsafe partial class NativeDdb
         out IntPtr output);
 
     /// <summary>
-    /// The exact statistics of the COG of a built GeoRaster written next to it (ABI 2.11): <c>{"status"}</c>.
+    /// The exact statistics of the COG of a built GeoRaster written next to it, and of its uploaded file when they are
+    /// missing (ABI 2.11; the uploaded file since 2.12): <c>{"status"}</c>.
     /// <paramref name="optionsJson"/> is null or <c>{"threads": N}</c>; the progress callback is the one of
     /// <see cref="DDBExportRaster2"/>.
     /// </summary>
@@ -372,6 +373,14 @@ internal static unsafe partial class NativeDdb
     [LibraryImport(Library, StringMarshalling = StringMarshalling.Utf8)]
     internal static partial DdbResult DDBGetRasterValueInfoEx(string filePath, NativeRasterOptions* options,
         out IntPtr output);
+
+    /// <summary>
+    /// <see cref="DDBGetRasterValueInfoEx"/> of the file of an entry (ABI 2.12), with the same output: the exact
+    /// statistics of a GeoRaster are those its COG build counted in the uploaded file when the build has them.
+    /// </summary>
+    [LibraryImport(Library, StringMarshalling = StringMarshalling.Utf8)]
+    internal static partial DdbResult DDBGetRasterValueInfoEx2(string ddbPath, string entryPath,
+        NativeRasterOptions* options, out IntPtr output);
 
     [LibraryImport(Library, StringMarshalling = StringMarshalling.Utf8)]
     internal static partial DdbResult DDBGetRasterPointValueEx(string filePath, double lon, double lat,

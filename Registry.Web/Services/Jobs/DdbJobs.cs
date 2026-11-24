@@ -78,8 +78,10 @@ public class DdbJobs : DdbRetriedJob
     /// <summary>
     /// Writes the exact statistics of the COG of the built GeoRaster <paramref name="path"/> next to it: a COG built
     /// before libddb wrote them has none, and the first request that needs them (Plant Health, the value info, the
-    /// stretch of a non-Byte tile) would read every pixel. One pass over its pixels on the threads of a background
-    /// rebuild, on the rebuilds queue; a COG that has them already is not read.
+    /// stretch of a non-Byte tile) would read every pixel. The statistics of the uploaded file too, when the build did
+    /// not keep them: without them every value info of the entry reads every pixel of the file. One pass over the
+    /// pixels of each on the threads of a background rebuild, on the rebuilds queue; statistics that are there already
+    /// are not computed again.
     /// </summary>
     /// <remarks>The retry policy of <see cref="RebuildInBackground"/>: a build of the entry that holds its lock is waited for.</remarks>
     [AutomaticRetry(Attempts = DdbRetryPolicy.Attempts,

@@ -34,10 +34,11 @@ namespace Registry.Web.Services.Adapters;
 /// or running is left to it.
 /// </para>
 /// <para>
-/// A complete GeoRaster whose COG has no statistics next to it (<see cref="BuildArtifact.Statistics"/> false: a COG
-/// built before libddb wrote them at build time) gets the job that writes them, on the rebuilds queue too
-/// (<see cref="Jobs.DdbJobs.BuildRasterStatistics"/>): without them the first request that needs them reads every
-/// pixel of the raster.
+/// A complete GeoRaster whose COG lacks statistics next to it gets the job that writes them, on the rebuilds queue too
+/// (<see cref="Jobs.DdbJobs.BuildRasterStatistics"/>): those of the COG (<see cref="BuildArtifact.Statistics"/> false:
+/// a COG built before libddb wrote them at build time), without which the first request that needs them reads every
+/// pixel of the COG, or those of the uploaded file (<see cref="BuildArtifact.SourceStatistics"/> false: a COG built
+/// before libddb kept them), without which every value info of the entry reads every pixel of the file.
 /// </para>
 /// </summary>
 /// <remarks>
@@ -102,7 +103,7 @@ public class ArtifactCompletenessCheckerService
                     stats.SkippedBackoff,
                     stats.Queued);
             if (stats.StatisticsQueued > 0)
-                console.Info("{Dataset}: queued the statistics of {Statistics} COG(s) built without them", ds.Key,
+                console.Info("{Dataset}: queued the statistics of {Statistics} raster(s) built without them", ds.Key,
                     stats.StatisticsQueued);
             if (stats.WaitingTasksRemoved > 0)
                 console.Info("{Dataset}: removed {Removed} task(s) of earlier attempts of builds that wait for files",
@@ -112,7 +113,7 @@ public class ArtifactCompletenessCheckerService
         console.Info("Artifact completeness check completed: {Succeeded}/{Datasets} datasets, scanned {Scanned} entries " +
                      "(not buildable: {NotBuildable}, active: {Active}, complete: {Complete}, pending: {Pending}, " +
                      "backing off after failures: {Backoff}), queued {Queued} rebuild(s), removed {WaitingTasks} task(s) " +
-                     "of earlier attempts of builds that wait for files, queued the statistics of {Statistics} COG(s), " +
+                     "of earlier attempts of builds that wait for files, queued the statistics of {Statistics} raster(s), " +
                      "{Failed} dataset failure(s)",
             result.Succeeded, result.Datasets, totals.Scanned, totals.SkippedNotBuildable, totals.SkippedActive,
             totals.SkippedComplete, totals.SkippedPending, totals.SkippedBackoff, totals.Queued,
@@ -192,7 +193,7 @@ public class ArtifactCompletenessCheckerService
                         continue;
                     case BuildState.Complete:
                         stats.SkippedComplete++;
-                        if (build.Find(ArtifactRoles.RasterCog) is { Statistics: false })
+                        if (LacksStatistics(build.Find(ArtifactRoles.RasterCog)))
                             withoutStatistics.Add(entry);
                         continue;
                 }
@@ -365,8 +366,15 @@ public class ArtifactCompletenessCheckerService
         return removed;
     }
 
-    // The statistics of the COGs that lack them, one job per entry; an entry with a build job (or a statistics job,
-    // which is indexed as a build) queued, scheduled or running is left to it
+    /// <summary>
+    /// The COG of a GeoRaster without its statistics or without those of the uploaded file; null (not a COG, or a libddb
+    /// that does not say) is not missing.
+    /// </summary>
+    internal static bool LacksStatistics(BuildArtifact? cog) =>
+        cog is { Statistics: false } or { SourceStatistics: false };
+
+    // The statistics of the COGs that lack them (theirs or those of the uploaded file), one job per entry; an entry with
+    // a build job (or a statistics job, which is indexed as a build) queued, scheduled or running is left to it
     private async Task<int> QueueStatisticsAsync(IDDB ddb, DatasetKey dataset, string dsSlug, string key,
         List<EntrySummary> entries, CancellationToken ct)
     {
@@ -388,8 +396,9 @@ public class ArtifactCompletenessCheckerService
             await _builds.QueueRasterStatisticsAsync(new BuildTarget(ddb, dataset, orgSlug, dsSlug), entry.Path,
                 entry.Hash, BuildOrigin.Service);
             queued++;
-            _logger.LogInformation("Enqueued the statistics of {Key} path={Path} (a COG without them)", key,
-                entry.Path);
+            _logger.LogInformation(
+                "Enqueued the statistics of {Key} path={Path} (a COG without them or without those of the uploaded file)",
+                key, entry.Path);
             await Task.Delay(InterEntryDelayMs, ct);
         }
 

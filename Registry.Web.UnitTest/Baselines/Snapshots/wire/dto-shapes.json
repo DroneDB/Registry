@@ -253,6 +253,7 @@
       "legacy": true,
       "fallbackFor": "FallbackFor-text",
       "statistics": true,
+      "sourceStatistics": true,
       "crs": {
         "name": "Name-text",
         "epsg": 42,
@@ -282,6 +283,7 @@
           "legacy": true,
           "fallbackFor": "FallbackFor-text",
           "statistics": true,
+          "sourceStatistics": true,
           "crs": {
             "name": "Name-text",
             "epsg": 42,
@@ -487,6 +489,7 @@
           "legacy": true,
           "fallbackFor": "FallbackFor-text",
           "statistics": true,
+          "sourceStatistics": true,
           "crs": {
             "name": "Name-text",
             "epsg": 42,
@@ -540,6 +543,7 @@
             "legacy": true,
             "fallbackFor": "FallbackFor-text",
             "statistics": true,
+            "sourceStatistics": true,
             "crs": {
               "name": "Name-text",
               "epsg": 42,

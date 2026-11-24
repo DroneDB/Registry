@@ -752,6 +752,17 @@ public class NativeDdbWrapper : IDdbWrapper
             (out IntPtr output) => NativeDdb.DDBGetRasterValueInfoEx(path, pointer, out output));
     }
 
+    public unsafe string GetEntryRasterValueInfo(string ddbPath, string entryPath, RasterAnalysisOptions? options)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(ddbPath);
+        ArgumentException.ThrowIfNullOrWhiteSpace(entryPath);
+        using var native = NativeRasterOptionsHandle.Create(options);
+        var pointer = native.Pointer;
+        return NativeCall.InvokeRequiredString(nameof(NativeDdb.DDBGetRasterValueInfoEx2),
+            (out IntPtr output) =>
+                NativeDdb.DDBGetRasterValueInfoEx2(ddbPath, NormalizeSeparators(entryPath), pointer, out output));
+    }
+
     public unsafe string GetRasterPointValue(string path, double lon, double lat, RasterAnalysisOptions? options = null)
     {
         ArgumentNullException.ThrowIfNull(path);

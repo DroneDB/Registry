@@ -112,7 +112,7 @@ public sealed class NativeGateHeavyLaneTests : IDisposable
             (r, ct) => r.GetRasterInfoAsync(OrgSlug, DsSlug, "ortho.tif", ct: ct));
         yield return Case("GetRasterMetadata", d => d.GetRasterMetadata(It.IsAny<string>(), It.IsAny<string?>(), It.IsAny<string?>()),
             (r, ct) => r.GetRasterMetadataAsync(OrgSlug, DsSlug, "ortho.tif", ct: ct));
-        yield return Case("GetRasterValueInfo", d => d.GetRasterValueInfo(It.IsAny<string>(), It.IsAny<RasterAnalysisOptions?>()),
+        yield return Case("GetRasterValueInfo", d => d.GetEntryRasterValueInfo(It.IsAny<string>(), It.IsAny<RasterAnalysisOptions?>()),
             (r, ct) => r.GetRasterValueInfoAsync(OrgSlug, DsSlug, "ortho.tif", ct: ct));
         yield return Case("GetRasterPointValue",
             d => d.GetRasterPointValue(It.IsAny<string>(), 1, 2, It.IsAny<RasterAnalysisOptions?>()),
@@ -177,7 +177,7 @@ public sealed class NativeGateHeavyLaneTests : IDisposable
     [Test]
     public async Task Export_RunsTheSizeEstimateAndTheExportInTheHeavyLane()
     {
-        Native(d => d.GetRasterValueInfo(It.IsAny<string>(), It.IsAny<RasterAnalysisOptions?>()), Info);
+        Native(d => d.GetEntryRasterValueInfo(It.IsAny<string>(), It.IsAny<RasterAnalysisOptions?>()), Info);
         // The export writes the scratch file it is given, which the result then streams
         _ddb.Setup(d => d.ExportRaster(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string?>(), It.IsAny<string?>(),
                 It.IsAny<string?>(), It.IsAny<string?>(), It.IsAny<string?>(), It.IsAny<string?>()))

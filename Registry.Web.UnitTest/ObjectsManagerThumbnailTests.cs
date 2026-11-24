@@ -569,7 +569,8 @@ public class ObjectsManagerThumbnailTests : TestBase
         SetupEntry("ortho.tif", EntryType.GeoRaster, "raster1");
         // The entry has a build that has not produced its COG yet: the values do not wait for it
         SetupBuild("ortho.tif", EntryType.GeoRaster, "raster1", BuildState.None);
-        _ddbMock.Setup(x => x.GetRasterValueInfo(It.IsAny<string>(), It.IsAny<RasterAnalysisOptions?>())).Returns("{}");
+        _ddbMock.Setup(x => x.GetEntryRasterValueInfo(It.IsAny<string>(), It.IsAny<RasterAnalysisOptions?>()))
+            .Returns("{}");
 
         await invoke(CreateManager());
 
@@ -581,7 +582,7 @@ public class ObjectsManagerThumbnailTests : TestBase
     public Task GetRasterValueInfo_ReadsTheSourceFile() =>
         ValuesAreReadFromTheSourceFile(
             m => m.Raster.GetRasterValueInfoAsync(OrgSlug, DsSlug, "ortho.tif"),
-            x => x.GetRasterValueInfo("ortho.tif", It.IsAny<RasterAnalysisOptions?>()));
+            x => x.GetEntryRasterValueInfo("ortho.tif", It.IsAny<RasterAnalysisOptions?>()));
 
     [Test]
     public Task GetRasterPointValue_AtAPoint_ReadsTheSourceFile() =>
@@ -734,7 +735,50 @@ public class ObjectsManagerThumbnailTests : TestBase
         doc.RootElement.GetProperty("estimatedExportBytes").GetInt64().ShouldBe(400);
         _ddbMock.Verify(x => x.GetRasterPointValue("ortho.tif", It.IsAny<double>(), It.IsAny<double>(),
             It.IsAny<RasterAnalysisOptions?>()), Times.Never);
-        _ddbMock.Verify(x => x.GetRasterValueInfo("ortho.tif", It.IsAny<RasterAnalysisOptions?>()), Times.Never);
+        _ddbMock.Verify(x => x.GetEntryRasterValueInfo(It.IsAny<string>(), It.IsAny<RasterAnalysisOptions?>()),
+            Times.Never);
+        _ddbMock.Verify(x => x.GetRasterValueInfo(".ddb/build/raster1/cog/cog.tif", It.IsAny<RasterAnalysisOptions?>()),
+            Times.Once);
+    }
+
+    // The value info of the uploaded file is asked of its entry (dataset-relative path, the options as they came), so
+    // libddb uses the statistics the COG build counted in the file instead of reading every pixel
+    [Test]
+    public async Task GetRasterValueInfo_OfASourceFile_IsAskedOfItsEntry_WithTheOptions()
+    {
+        SetupEntry("fields/ortho.tif", EntryType.GeoRaster, "raster1", 4_000, 3_000);
+        var options = new RasterAnalysisOptions(Nodata: 0, Formula: "NDVI");
+        _ddbMock.Setup(x => x.GetEntryRasterValueInfo("fields/ortho.tif", options))
+            .Returns("""{"pixelCount": 100, "validPixelCount": 50}""");
+
+        var info = await CreateManager().Raster.GetRasterValueInfoAsync(OrgSlug, DsSlug, "fields/ortho.tif", options);
+
+        using var doc = System.Text.Json.JsonDocument.Parse(info);
+        doc.RootElement.GetProperty("estimatedExportBytes").GetInt64().ShouldBe(200);
+        _ddbMock.Verify(x => x.GetEntryRasterValueInfo("fields/ortho.tif", options), Times.Once);
+        _ddbMock.Verify(x => x.GetRasterValueInfo(It.IsAny<string>(), It.IsAny<RasterAnalysisOptions?>()), Times.Never);
+        _ddbMock.Verify(x => x.GetBuildArtifacts(It.IsAny<IReadOnlyList<string>>()), Times.Never);
+    }
+
+    // An entry indexed without its size whose file libddb cannot read in one piece: the value info of the COG, by its path
+    [Test]
+    public async Task GetRasterValueInfo_OfASourceTooLargeToRead_WithoutItsSizeInTheIndex_ReadsTheCogByItsPath()
+    {
+        SetupEntry("ortho.tif", EntryType.GeoRaster, "raster1");
+        SetupBuild("ortho.tif", EntryType.GeoRaster, "raster1", BuildState.Complete,
+            TestBuilds.File(ArtifactRoles.RasterCog, "cog/cog.tif"));
+        _ddbMock.Setup(x => x.GetEntryRasterValueInfo("ortho.tif", It.IsAny<RasterAnalysisOptions?>()))
+            .Throws(new InvalidOperationException("Could not read raster value info.",
+                new DdbException("2000000000 pixels, more than the 1000000000 that can be read in one piece: build the dataset first")));
+        _ddbMock.Setup(x => x.GetRasterValueInfo(".ddb/build/raster1/cog/cog.tif", It.IsAny<RasterAnalysisOptions?>()))
+            .Returns("""{"pixelCount": 100, "validPixelCount": 100}""");
+
+        var info = await CreateManager().Raster.GetRasterValueInfoAsync(OrgSlug, DsSlug, "ortho.tif");
+
+        using var doc = System.Text.Json.JsonDocument.Parse(info);
+        doc.RootElement.GetProperty("estimatedExportBytes").GetInt64().ShouldBe(400);
+        _ddbMock.Verify(x => x.GetRasterValueInfo(".ddb/build/raster1/cog/cog.tif", It.IsAny<RasterAnalysisOptions?>()),
+            Times.Once);
     }
 
     // 1,000,000,000 pixels exactly is still read in one piece (libddb refuses more than its limit)
@@ -774,7 +818,7 @@ public class ObjectsManagerThumbnailTests : TestBase
     public async Task GetRasterValueInfo_AddsTheEstimateAndTheLimitOfAnExport()
     {
         SetupEntry("ortho.tif", EntryType.GeoRaster, "raster1");
-        _ddbMock.Setup(x => x.GetRasterValueInfo("ortho.tif", It.IsAny<RasterAnalysisOptions?>()))
+        _ddbMock.Setup(x => x.GetEntryRasterValueInfo("ortho.tif", It.IsAny<RasterAnalysisOptions?>()))
             .Returns("""{"width": 100, "height": 100, "pixelCount": 10000, "validPixelCount": 7500}""");
 
         var json = await CreateManager().Raster.GetRasterValueInfoAsync(OrgSlug, DsSlug, "ortho.tif");
@@ -790,7 +834,7 @@ public class ObjectsManagerThumbnailTests : TestBase
     {
         SetupEntry("ortho.tif", EntryType.GeoRaster, "raster1");
         // 25 % of the file has a value; the window has 4000 source pixels: 1000 pixels x 4 bytes
-        _ddbMock.Setup(x => x.GetRasterValueInfo("ortho.tif", It.IsAny<RasterAnalysisOptions?>()))
+        _ddbMock.Setup(x => x.GetEntryRasterValueInfo("ortho.tif", It.IsAny<RasterAnalysisOptions?>()))
             .Returns("""{"pixelCount": 10000, "validPixelCount": 2500, "windowPixelCount": 4000}""");
 
         var json = await CreateManager().Raster.GetRasterValueInfoAsync(OrgSlug, DsSlug, "ortho.tif",
@@ -832,7 +876,7 @@ public class ObjectsManagerThumbnailTests : TestBase
         sent.ShouldNotBeNull();
         sent.RescaleUnit.ShouldBe("K");
         sent.Nodata.ShouldBeNull();
-        _ddbMock.Verify(x => x.GetRasterValueInfo("ortho.tif",
+        _ddbMock.Verify(x => x.GetEntryRasterValueInfo("ortho.tif",
             It.Is<RasterAnalysisOptions?>(o => o == null || o.RescaleUnit == null)), Times.Once);
     }
 
@@ -887,7 +931,7 @@ public class ObjectsManagerThumbnailTests : TestBase
         SetupEntry("ortho.tif", EntryType.GeoRaster, "raster1");
         SetupBuild("ortho.tif", EntryType.GeoRaster, "raster1", BuildState.Complete,
             TestBuilds.File(ArtifactRoles.RasterCog, "cog/cog.tif"));
-        _ddbMock.Setup(x => x.GetRasterValueInfo("ortho.tif", It.IsAny<RasterAnalysisOptions?>())).Returns(sourceCounts);
+        _ddbMock.Setup(x => x.GetEntryRasterValueInfo("ortho.tif", It.IsAny<RasterAnalysisOptions?>())).Returns(sourceCounts);
         _ddbMock.Setup(x => x.GetRasterValueInfo(".ddb/build/raster1/cog/cog.tif", It.IsAny<RasterAnalysisOptions?>()))
             .Returns(cogCounts);
     }
@@ -924,7 +968,7 @@ public class ObjectsManagerThumbnailTests : TestBase
             raster.EnsureExportSizeWithinLimitAsync(OrgSlug, DsSlug, "ortho.tif", RasterAnalysisOptions.None));
 
         ex.Message.ShouldContain("exceeds maximum allowed size");
-        _ddbMock.Verify(x => x.GetRasterValueInfo("ortho.tif", null), Times.Once);
+        _ddbMock.Verify(x => x.GetEntryRasterValueInfo("ortho.tif", null), Times.Once);
     }
 
     [Test]
@@ -960,7 +1004,7 @@ public class ObjectsManagerThumbnailTests : TestBase
         SetupBuild("ortho.tif", EntryType.GeoRaster, "raster1", BuildState.Complete,
             TestBuilds.File(ArtifactRoles.RasterCog, "cog/cog.tif"));
         RasterAnalysisOptions? asked = null;
-        _ddbMock.Setup(x => x.GetRasterValueInfo("ortho.tif", It.IsAny<RasterAnalysisOptions?>()))
+        _ddbMock.Setup(x => x.GetEntryRasterValueInfo("ortho.tif", It.IsAny<RasterAnalysisOptions?>()))
             .Callback<string, RasterAnalysisOptions?>((_, o) => asked = o)
             .Returns("""{"pixelCount": 400000000, "validPixelCount": 300000000}""");
 
@@ -981,7 +1025,7 @@ public class ObjectsManagerThumbnailTests : TestBase
         double[] window = [12.0, 45.0, 13.0, 46.0];
         var asked = new List<RasterAnalysisOptions?>();
         // 25 % of the file has a value; the window has 4000 source pixels: 1000 x 4 bytes. The whole file: 10,000 bytes
-        _ddbMock.Setup(x => x.GetRasterValueInfo("ortho.tif", It.IsAny<RasterAnalysisOptions?>()))
+        _ddbMock.Setup(x => x.GetEntryRasterValueInfo("ortho.tif", It.IsAny<RasterAnalysisOptions?>()))
             .Callback<string, RasterAnalysisOptions?>((_, o) => asked.Add(o))
             .Returns<string, RasterAnalysisOptions?>((_, o) => o?.Bbox is null
                 ? """{"pixelCount": 10000, "validPixelCount": 2500}"""

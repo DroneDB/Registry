@@ -458,6 +458,9 @@ public class FakeDdbWrapper : IDdbWrapper
     public virtual string GetRasterValueInfo(string path) => throw Unsupported();
     public virtual string GetRasterValueInfo(string path, RasterAnalysisOptions? options) => throw Unsupported();
 
+    public virtual string GetEntryRasterValueInfo(string ddbPath, string entryPath, RasterAnalysisOptions? options) =>
+        throw Unsupported();
+
     public virtual string GetRasterPointValue(string path, double lon, double lat,
         RasterAnalysisOptions? options = null) => throw Unsupported();
 

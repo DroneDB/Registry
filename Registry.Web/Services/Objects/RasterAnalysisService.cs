@@ -68,13 +68,24 @@ public sealed class RasterAnalysisService
     public async Task<string> GetRasterValueInfoAsync(string orgSlug, string dsSlug, string path,
         RasterAnalysisOptions? options = null, CancellationToken ct = default)
     {
-        var json = await OnSourceAsync(orgSlug, dsSlug, path, (ddb, file) => ddb.GetRasterValueInfo(file, options), ct);
+        var json = await ValueInfoAsync(orgSlug, dsSlug, path, options, ct);
         return AddExportEstimate(json);
     }
 
     /// <summary>
+    /// The value info of the raster (<see cref="OnSourceAsync{T}"/>): of the uploaded file through its entry, so the
+    /// exact statistics its COG build counted in it are used instead of a read of every pixel
+    /// (<see cref="IDdbRaster.GetEntryRasterValueInfo"/>), or of the COG of its build by its path when the file is too
+    /// large to read in one piece.
+    /// </summary>
+    private Task<string> ValueInfoAsync(string orgSlug, string dsSlug, string path, RasterAnalysisOptions? options,
+        CancellationToken ct) =>
+        OnSourceAsync(orgSlug, dsSlug, path, (ddb, file) => ddb.GetRasterValueInfo(file, options), ct,
+            readSource: (ddb, entryPath) => ddb.GetEntryRasterValueInfo(entryPath, options));
+
+    /// <summary>
     /// The size of an export of the raster (D-023), the one estimate of the value info and of the check of an export: the
-    /// value info of the same source file (<see cref="OnSourceAsync{T}"/>, with the same fallback to the COG), with the NoData
+    /// value info of the same source file (<see cref="ValueInfoAsync"/>, with the same fallback to the COG), with the NoData
     /// value and the window of <paramref name="options"/>, through <see cref="ExportEstimate.Bytes(JsonElement)"/>. The
     /// formula is not sent: it changes the stretch of the value info, not its pixel counts. Null when libddb counted no
     /// pixels.
@@ -91,7 +102,7 @@ public sealed class RasterAnalysisService
         RasterAnalysisOptions? options, CancellationToken ct)
     {
         var counting = ExportEstimate.CountingOptions(options);
-        var json = await OnSourceAsync(orgSlug, dsSlug, path, (ddb, file) => ddb.GetRasterValueInfo(file, counting), ct);
+        var json = await ValueInfoAsync(orgSlug, dsSlug, path, counting, ct);
         using var doc = JsonDocument.Parse(json);
         return (ExportEstimate.Bytes(doc.RootElement), ExportEstimate.WindowPixels(doc.RootElement));
     }
@@ -255,9 +266,13 @@ public sealed class RasterAnalysisService
     /// read in one piece (more than <see cref="MaxSourcePixels"/>, from the width and height the index holds for the entry)
     /// is read from the COG of its build instead, which is the one raster that is always readable; its values are then
     /// those of the resampled COG. <paramref name="check"/> refuses a request the entry cannot answer before any read.
+    /// <paramref name="readSource"/>, when given, reads the source file in place of <paramref name="read"/>, from the
+    /// dataset-relative path of its entry: a read libddb answers from what it knows of the entry; the COG is always
+    /// read by <paramref name="read"/>.
     /// </summary>
     private async Task<T> OnSourceAsync<T>(string orgSlug, string dsSlug, string path,
-        Func<IDDB, string, T> read, CancellationToken ct, Action<Entry>? check = null)
+        Func<IDDB, string, T> read, CancellationToken ct, Action<Entry>? check = null,
+        Func<IDDB, string, T>? readSource = null)
     {
         var source = await _sources.ResolveSourceFileAsync(orgSlug, dsSlug, path, ct);
         check?.Invoke(source.Entry);
@@ -272,7 +287,8 @@ public sealed class RasterAnalysisService
 
         try
         {
-            return await RunAsync(() => read(source.Ddb, source.SourcePath), ct);
+            var onSource = readSource ?? read;
+            return await RunAsync(() => onSource(source.Ddb, source.SourcePath), ct);
         }
         catch (InvalidOperationException ex) when (pixels is null && TooLargeToRead(ex))
         {

@@ -93,17 +93,17 @@ public class NativeDdbDeclarationTests
     }
 
     /// <summary>
-    /// libddb 2.11 is the only libddb the Registry runs: every export it calls since 2.0 is required by the startup
-    /// handshake (ABI 2.11), with no optional export and no fallback for an older library: the Ex variants of align, merge
+    /// libddb 2.12 is the only libddb the Registry runs: every export it calls since 2.0 is required by the startup
+    /// handshake (ABI 2.12), with no optional export and no fallback for an older library: the Ex variants of align, merge
     /// and mask, the raster value exports with a <c>DDBRasterOptions</c>, the renders and the export with options
     /// (U-202, U-406), the build and the contours with progress (FR-PRC-42, U-413), the visualization tile encoded
     /// by libddb in the format asked for (<c>DDBMemoryTileEx3</c>, ABI 2.5), the only tile-ex export Registry calls, and
     /// the region and index renders with options (<c>DDBRenderRasterRegionEx2</c>, <c>DDBRenderRasterIndexEx</c>).
     /// </summary>
     [Test]
-    public void TheExportsOfLibddb_AreRequired_WithTheRequiredAbi211()
+    public void TheExportsOfLibddb_AreRequired_WithTheRequiredAbi212()
     {
-        DdbAbi.Minor.ShouldBe(11);
+        DdbAbi.Minor.ShouldBe(12);
         DdbAbi.RequiredSymbols.ShouldContain("DDBBuildEx2");
         DdbAbi.RequiredSymbols.ShouldContain("DDBGenerateContoursEx2");
         DdbAbi.RequiredSymbols.ShouldContain("DDBExportRaster3");
@@ -128,6 +128,8 @@ public class NativeDdbDeclarationTests
         DdbAbi.RequiredSymbols.ShouldContain("DDBFindCoverage");
         // ABI 2.11: the statistics of a built COG written next to it
         DdbAbi.RequiredSymbols.ShouldContain("DDBBuildRasterStatistics");
+        // ABI 2.12: the value info of the file of an entry, with the statistics its COG build counted in it
+        DdbAbi.RequiredSymbols.ShouldContain("DDBGetRasterValueInfoEx2");
         typeof(NativeDdb).Assembly.GetType("Registry.Adapters.DroneDB.NativeDdbOptional").ShouldBeNull();
         typeof(NativeDdbWrapper).GetProperty("BuildProgressSupported",
             BindingFlags.Static | BindingFlags.NonPublic | BindingFlags.Public).ShouldBeNull();

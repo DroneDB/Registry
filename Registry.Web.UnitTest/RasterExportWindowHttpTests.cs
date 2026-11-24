@@ -63,8 +63,9 @@ public sealed class RasterExportWindowHttpTests : RasterExportWindowFixture
 
     // The value info of the raster with the window: windowPixelCount source pixels in it
     private void WindowInfo(long windowPixels) =>
-        Factory.DdbWrapper.Setup(d => d.GetRasterValueInfo(It.IsAny<string>(), It.IsAny<RasterAnalysisOptions?>()))
-            .Returns((string _, RasterAnalysisOptions? options) => options?.Bbox is null
+        Factory.DdbWrapper.Setup(d => d.GetEntryRasterValueInfo(It.IsAny<string>(), It.IsAny<string>(),
+                It.IsAny<RasterAnalysisOptions?>()))
+            .Returns((string _, string _, RasterAnalysisOptions? options) => options?.Bbox is null
                 ? WholeInfo
                 : $$"""{"pixelCount": 400000000, "validPixelCount": 300000000, "windowPixelCount": {{windowPixels}}}""");
 
@@ -74,7 +75,8 @@ public sealed class RasterExportWindowHttpTests : RasterExportWindowFixture
     [Test]
     public async Task AnExportOverTheLimit_Is400AtTheSubmit_WithTheEstimateAndTheLimit()
     {
-        Factory.DdbWrapper.Setup(d => d.GetRasterValueInfo(It.IsAny<string>(), It.IsAny<RasterAnalysisOptions?>()))
+        Factory.DdbWrapper.Setup(d => d.GetEntryRasterValueInfo(It.IsAny<string>(), It.IsAny<string>(),
+                It.IsAny<RasterAnalysisOptions?>()))
             .Returns(WholeInfo);
 
         var (response, body, json) = await Submit("{}");
@@ -106,7 +108,7 @@ public sealed class RasterExportWindowHttpTests : RasterExportWindowFixture
 
         response.StatusCode.ShouldBe(HttpStatusCode.Accepted, body);
         json!["taskId"]!.GetValue<string>().ShouldNotBeNullOrEmpty();
-        Factory.DdbWrapper.Verify(d => d.GetRasterValueInfo(It.IsAny<string>(),
+        Factory.DdbWrapper.Verify(d => d.GetEntryRasterValueInfo(It.IsAny<string>(), It.IsAny<string>(),
             It.Is<RasterAnalysisOptions?>(o => o != null && o.Bbox != null && o.Bbox.SequenceEqual(Box))), Times.AtLeastOnce());
     }
 

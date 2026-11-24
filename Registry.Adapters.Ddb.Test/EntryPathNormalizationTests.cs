@@ -66,6 +66,7 @@ public class EntryPathNormalizationTests : TestBase
         yield return (nameof(NativeDdb.DDBBuildEx), () => Wrapper.Build(root, path, options: BuildOptions.Capped(1)));
         yield return (nameof(NativeDdb.DDBGetBuildArtifacts), () => Wrapper.GetBuildArtifacts(root, [path]));
         yield return (nameof(NativeDdb.DDBExportSplatSpz), () => Wrapper.ExportSplatSpz(root, path, CancellationToken.None));
+        yield return (nameof(NativeDdb.DDBGetRasterValueInfoEx2), () => Wrapper.GetEntryRasterValueInfo(root, path, null));
         yield return (nameof(NativeDdb.DDBExportSplatTrainingData), () => Wrapper.ExportSplatTrainingData(root, path,
             Path.Combine(root, "..", "training-out"), null, null, CancellationToken.None));
         yield return (nameof(NativeDdb.DDBMetaAdd), () => Wrapper.MetaAdd(root, "annotations", "123", path));

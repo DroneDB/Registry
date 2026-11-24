@@ -32,7 +32,8 @@ public static class QueueDdbJobs
     }
 
     /// <summary>
-    /// Queues the statistics of the COG of <paramref name="path"/>: work no user waits for, on the rebuilds queue
+    /// Queues the statistics of the COG of <paramref name="path"/> and of its uploaded file: work no user waits for, on
+    /// the rebuilds queue
     /// (<see cref="DdbJobs.BuildRasterStatistics"/>).
     /// </summary>
     /// <returns>The job id.</returns>

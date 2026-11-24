@@ -347,6 +347,16 @@ public interface IDdbWrapper
     public string GetRasterValueInfo(string path, Registry.Ports.DroneDB.RasterAnalysisOptions? options);
 
     /// <summary>
+    /// <see cref="GetRasterValueInfo(string, Registry.Ports.DroneDB.RasterAnalysisOptions?)"/> of the file of the entry
+    /// <paramref name="entryPath"/> of the dataset <paramref name="ddbPath"/> (DDBGetRasterValueInfoEx2), with the same
+    /// output: the exact statistics of a GeoRaster are those its COG build counted in the uploaded file when the build
+    /// kept them (<see cref="Registry.Ports.DroneDB.BuildArtifact.SourceStatistics"/>), so no pixel is read for them.
+    /// Raises <c>DdbNotFoundException</c> for an entry that is not in the dataset.
+    /// </summary>
+    public string GetEntryRasterValueInfo(string ddbPath, string entryPath,
+        Registry.Ports.DroneDB.RasterAnalysisOptions? options);
+
+    /// <summary>
     /// Get raster value (temperature/elevation/etc.) at a specific pixel location
     /// </summary>
     public string GetRasterPointValue(string path, int x, int y);

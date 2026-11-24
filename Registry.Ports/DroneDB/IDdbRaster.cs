@@ -119,6 +119,16 @@ public interface IDdbRaster
     string GetRasterValueInfo(string path, RasterAnalysisOptions? options);
 
     /// <summary>
+    /// <see cref="GetRasterValueInfo(string, RasterAnalysisOptions?)"/> of the file of the entry
+    /// <paramref name="entryPath"/> (dataset-relative), with the same output: the exact statistics of a GeoRaster are
+    /// those its COG build counted in the uploaded file when the build kept them
+    /// (<see cref="BuildArtifact.SourceStatistics"/>), so no pixel is read for them; otherwise, and with a NoData
+    /// override, they are read from the file.
+    /// </summary>
+    /// <exception cref="DdbInvalidArgumentsException">A formula that does not exist or that the raster cannot compute.</exception>
+    string GetEntryRasterValueInfo(string entryPath, RasterAnalysisOptions? options);
+
+    /// <summary>
     /// Get raster value (temperature/elevation/etc.) at a specific pixel location
     /// </summary>
     /// <exception cref="DdbInvalidArgumentsException">The pixel is outside the raster.</exception>

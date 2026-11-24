@@ -68,6 +68,17 @@ public sealed class BuildArtifact
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public bool? Statistics { get; set; }
 
+    /// <summary>
+    /// The COG of a GeoRaster (<see cref="ArtifactRoles.RasterCog"/>): whether the exact statistics of the uploaded file,
+    /// which its build counted, are kept next to it. With them the value info of the entry
+    /// (<see cref="IDdbRaster.GetEntryRasterValueInfo"/>) reads no pixel for them. False for a COG built before libddb
+    /// kept them (<see cref="IDdbBuild.BuildRasterStatistics"/> writes them); null for the other artifacts and from a
+    /// libddb without them.
+    /// </summary>
+    [JsonPropertyName("sourceStatistics")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public bool? SourceStatistics { get; set; }
+
     /// <summary>The coordinate system of the artifact (a point cloud's COPC); null when libddb gives none.</summary>
     [JsonPropertyName("crs")]
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]

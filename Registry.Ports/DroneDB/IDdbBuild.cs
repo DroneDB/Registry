@@ -48,7 +48,9 @@ public interface IDdbBuild
     /// <summary>
     /// Writes the exact statistics of the COG of the built GeoRaster <paramref name="path"/> next to it when it has
     /// none (<c>DDBBuildRasterStatistics</c>): one pass over its pixels on at most <see cref="BuildOptions.Threads"/>
-    /// threads, under the build lock of the entry. Raises <c>DdbBuildInProgressException</c> while a build of the
+    /// threads, under the build lock of the entry. It writes the statistics of the uploaded file too when they are
+    /// missing (<see cref="BuildArtifact.SourceStatistics"/>); <see cref="RasterStatisticsStatus.Present"/> means that both
+    /// were there. Raises <c>DdbBuildInProgressException</c> while a build of the
     /// entry runs. Stops with <paramref name="cancellationToken"/>.
     /// </summary>
     RasterStatisticsStatus BuildRasterStatistics(string path, BuildOptions? options, Action<double, string?>? progress,

@@ -5,10 +5,10 @@ namespace Registry.Ports.DroneDB;
 /// <summary>What <c>DDBBuildRasterStatistics</c> found or did for the COG of a GeoRaster.</summary>
 public enum RasterStatisticsStatus
 {
-    /// <summary>The statistics were computed and written next to the COG.</summary>
+    /// <summary>The statistics that were missing (of the COG, of the uploaded file) were computed and written next to the COG.</summary>
     Computed,
 
-    /// <summary>The COG had them already.</summary>
+    /// <summary>The COG had them already, those of the uploaded file too.</summary>
     Present,
 
     /// <summary>The entry has no complete build: its build writes them.</summary>

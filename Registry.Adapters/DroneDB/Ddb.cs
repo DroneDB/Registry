@@ -643,6 +643,13 @@ public class DDB : IDDB
             ex => "Could not read raster value info.");
     }
 
+    public string GetEntryRasterValueInfo(string entryPath, RasterAnalysisOptions? options)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(entryPath);
+        return Wrap(() => Wrapper.GetEntryRasterValueInfo(DatasetFolderPath, entryPath.ToDdbPath(), options),
+            ex => "Could not read raster value info.");
+    }
+
     public string GetRasterPointValue(string path, double lon, double lat, RasterAnalysisOptions? options = null)
     {
         return Wrap(() => Wrapper.GetRasterPointValue(GetLocalPath(path), lon, lat, options),

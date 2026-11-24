@@ -116,8 +116,8 @@ public sealed class BuildScheduler
             payload => Enqueue(target.Dataset, path, false, background: true, payload));
 
     /// <summary>
-    /// Queues the statistics of the COG of the built GeoRaster <paramref name="path"/> (a COG built before libddb wrote
-    /// them next to it): no build, so the dataset is not flagged as having pending builds.
+    /// Queues the statistics of the COG of the built GeoRaster <paramref name="path"/> and of its uploaded file (a COG
+    /// built before libddb wrote them next to it): no build, so the dataset is not flagged as having pending builds.
     /// </summary>
     /// <returns>The job id.</returns>
     public async Task<string> QueueRasterStatisticsAsync(BuildTarget target, string path, string? hash,

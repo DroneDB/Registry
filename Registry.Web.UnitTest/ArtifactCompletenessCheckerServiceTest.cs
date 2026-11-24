@@ -314,11 +314,62 @@ public class ArtifactCompletenessCheckerServiceTest : TestBase
         meta.UserId.ShouldBe(MagicStrings.AutoBuildServiceUserId);
     }
 
-    /// <summary>A built GeoRaster whose COG has (or has not) its statistics next to it.</summary>
-    private static EntryBuildArtifacts CogBuild(string path, bool statistics)
+    /// <summary>
+    /// A complete GeoRaster whose COG has its statistics but not those of the uploaded file gets the same job, which
+    /// writes those; a COG with both gets none, and neither does one whose libddb does not say
+    /// (<see cref="BuildArtifact.SourceStatistics"/> null).
+    /// </summary>
+    [Test]
+    public async Task CheckAndQueueAsync_ACogWithoutTheStatisticsOfItsUploadedFile_GetsTheirJob()
+    {
+        await using var context = GetTest1Context();
+        var ddb = new Mock<IDDB>();
+        ddb.Setup(x => x.FindSummaries(It.IsAny<EntryQuery>())).Returns([
+            new DdbEntry { Path = "no-source.tif", Hash = "h-no-source" },
+            new DdbEntry { Path = "both.tif", Hash = "h-both" },
+            new DdbEntry { Path = "unknown.tif", Hash = "h-unknown" }
+        ]);
+        ddb.SetupBuilds(CogBuild("no-source.tif", true, sourceStatistics: false), CogBuild("both.tif", true),
+            CogBuild("unknown.tif", true, sourceStatistics: null));
+        _ddbManagerMock.Setup(x => x.Get(It.IsAny<string>(), It.IsAny<Guid>())).Returns(ddb.Object);
+
+        await Service(context).CheckAndQueueAsync(null, CancellationToken.None);
+
+        var enqueued = _backgroundJobMock.Invocations.Where(i => i.Method.Name == "EnqueueIndexed").ToArray();
+        enqueued.Length.ShouldBe(1);
+        var call = enqueued[0].Arguments[0].ShouldBeAssignableTo<Expression<Action<DdbJobs>>>()!;
+        call.Body.ShouldBeAssignableTo<MethodCallExpression>()!.Method.Name.ShouldBe(nameof(DdbJobs.BuildRasterStatistics));
+        var meta = enqueued[0].Arguments[1].ShouldBeOfType<IndexPayload>();
+        meta.Path.ShouldBe("no-source.tif");
+        meta.Hash.ShouldBe("h-no-source");
+    }
+
+    [TestCase(false, true, true)]
+    [TestCase(true, false, true)]
+    [TestCase(false, false, true)]
+    [TestCase(true, true, false)]
+    [TestCase(true, null, false)]
+    [TestCase(null, null, false)]
+    public void LacksStatistics_IsAMissingStatisticsOfTheCogOrOfTheUploadedFile(bool? statistics,
+        bool? sourceStatistics, bool lacks)
     {
         var cog = TestBuilds.File(ArtifactRoles.RasterCog, "cog/cog.tif", "image/tiff");
         cog.Statistics = statistics;
+        cog.SourceStatistics = sourceStatistics;
+
+        ArtifactCompletenessCheckerService.LacksStatistics(cog).ShouldBe(lacks);
+        ArtifactCompletenessCheckerService.LacksStatistics(null).ShouldBeFalse();
+    }
+
+    /// <summary>
+    /// A built GeoRaster whose COG has (or has not) its statistics next to it, and those of the uploaded file (null: a
+    /// libddb that does not say).
+    /// </summary>
+    private static EntryBuildArtifacts CogBuild(string path, bool statistics, bool? sourceStatistics = true)
+    {
+        var cog = TestBuilds.File(ArtifactRoles.RasterCog, "cog/cog.tif", "image/tiff");
+        cog.Statistics = statistics;
+        cog.SourceStatistics = sourceStatistics;
         return TestBuilds.Build(Folder, path, EntryType.GeoRaster, "h-" + path, BuildState.Complete, cog);
     }
 

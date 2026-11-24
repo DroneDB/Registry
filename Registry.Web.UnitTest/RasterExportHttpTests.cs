@@ -60,7 +60,8 @@ public sealed class RasterExportHttpTests : DatasetAccessFixture
         _size = 1024;
         _failAfterWriting = null;
         Factory.DdbWrapper.Invocations.Clear();
-        Factory.DdbWrapper.Setup(d => d.GetRasterValueInfo(It.IsAny<string>(), It.IsAny<RasterAnalysisOptions?>()))
+        Factory.DdbWrapper.Setup(d => d.GetEntryRasterValueInfo(It.IsAny<string>(), It.IsAny<string>(),
+                It.IsAny<RasterAnalysisOptions?>()))
             .Returns("""{"pixelCount": 100, "validPixelCount": 100}""");
         Factory.DdbWrapper.Setup(d => d.ExportRaster(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string?>(),
                 It.IsAny<string?>(), It.IsAny<string?>(), It.IsAny<string?>(), It.IsAny<string?>(), It.IsAny<string?>()))

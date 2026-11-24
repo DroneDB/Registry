@@ -73,7 +73,7 @@ public unsafe class LibddbContractTests : TestBase
         """;
 
     // fixtures/build-artifacts.json: the same artifact in the build manifest, which says that the COG has its
-    // statistics next to it (the build writes them)
+    // statistics next to it and those of the uploaded file (the build writes both)
     private const string BuiltCogArtifactJson = """
         {
           "downloadName": "cog.tif",
@@ -81,6 +81,7 @@ public unsafe class LibddbContractTests : TestBase
           "mediaType": "image/tiff; application=geotiff; profile=cloud-optimized",
           "path": "cog/cog.tif",
           "role": "raster.cog",
+          "sourceStatistics": true,
           "statistics": true,
           "version": "<volatile>"
         }
@@ -206,7 +207,7 @@ public unsafe class LibddbContractTests : TestBase
     }
 
     /// <summary>
-    /// The loaded libddb is the one the Registry runs (ABI 2.11 or later): it reports the ABI the handshake requires and lists the
+    /// The loaded libddb is the one the Registry runs (ABI 2.12 or later): it reports the ABI the handshake requires and lists the
     /// exports that report progress, which the wrapper always calls.
     /// </summary>
     [Test]
@@ -981,7 +982,7 @@ public unsafe class LibddbContractTests : TestBase
     /// The libddb entry points Registry.Adapters declares: every [DllImport("ddb")] method of the
     /// assembly, the ones LibraryImport generates included.
     /// </summary>
-    // The exports Registry requires (ABI 2.11)
+    // The exports Registry requires (ABI 2.12)
     private static string[] DeclaredExports() =>
         typeof(NativeDdbWrapper).Assembly.GetTypes()
             .SelectMany(t => t.GetMethods(BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic |
