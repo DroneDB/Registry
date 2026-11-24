@@ -383,19 +383,14 @@ public class ArtifactCompletenessCheckerService
             if (withJob.Contains(entry.Path))
                 continue;
 
-            try
-            {
-                await _builds.QueueRasterStatisticsAsync(new BuildTarget(ddb, dataset, orgSlug, dsSlug), entry.Path,
-                    entry.Hash, BuildOrigin.Service);
-                queued++;
-                _logger.LogInformation("Enqueued the statistics of {Key} path={Path} (a COG without them)", key,
-                    entry.Path);
-                await Task.Delay(InterEntryDelayMs, ct);
-            }
-            catch (Exception ex) when (ex is not OperationCanceledException)
-            {
-                _logger.LogWarning(ex, "Failed to enqueue the statistics of {Key} path={Path}", key, entry.Path);
-            }
+            // A job that cannot be queued fails the dataset, which the sweep logs before the next one: the next
+            // night queues it again
+            await _builds.QueueRasterStatisticsAsync(new BuildTarget(ddb, dataset, orgSlug, dsSlug), entry.Path,
+                entry.Hash, BuildOrigin.Service);
+            queued++;
+            _logger.LogInformation("Enqueued the statistics of {Key} path={Path} (a COG without them)", key,
+                entry.Path);
+            await Task.Delay(InterEntryDelayMs, ct);
         }
 
         return queued;
