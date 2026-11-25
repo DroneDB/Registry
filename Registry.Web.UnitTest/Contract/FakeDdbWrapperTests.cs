@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Threading;
 using Moq;
 using System.Text.Json;
 using System.Text.Json.Nodes;
@@ -39,6 +40,7 @@ public sealed class FakeDdbWrapperTests
     {
         ["add"] = d => d.Add(Root, AddedFiles.Select(p => Path.Combine(Root, p)).ToArray(), true),
         ["build-artifacts"] = d => d.GetBuildArtifacts(Root, ["ortho.tif", "layer.geojson", "cloud.las", "a.txt", "sub", "missing.tif"]),
+        ["cache-cleanup"] = d => d.CleanupCache(null, CancellationToken.None),
         ["copy-build-artifacts"] = d => d.CopyBuildArtifacts(Root, OtherRoot, BuiltHash),
         ["entry-types"] = d => d.GetEntryTypes(),
         ["get-drone-image"] = d => d.GetEntry(Root, "DJI_0018.JPG"),
@@ -238,6 +240,20 @@ public sealed class FakeDdbWrapperTests
     public void PathDepth_CountsTheFoldersBelowTheRoot(string path, int depth)
     {
         FakeDdbWrapper.PathDepth(path).ShouldBe(depth);
+    }
+
+    [Test]
+    public void CleanupCache_GivesTheRecordedCounts_AndHasNoFixtureForOtherAges()
+    {
+        var result = _ddb.CleanupCache(null, CancellationToken.None);
+
+        result.DryRun.ShouldBeFalse();
+        result.Kinds.Keys.Order().ShouldBe(["artefacts", "downloads", "dsm", "requests", "temp", "tiles"]);
+        (result.Kinds["downloads"].Entries, result.Kinds["downloads"].Bytes).ShouldBe((1L, 200L));
+        (result.Kinds["artefacts"].Entries, result.Kinds["artefacts"].Bytes).ShouldBe((1L, 600L));
+        (result.TotalEntries, result.TotalBytes).ShouldBe((2L, 800L));
+        Should.Throw<NotSupportedException>(() =>
+            _ddb.CleanupCache(new CacheCleanupOptions(TileDays: 1), CancellationToken.None));
     }
 
     [Test]

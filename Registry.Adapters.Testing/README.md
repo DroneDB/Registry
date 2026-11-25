@@ -30,7 +30,8 @@ Served: `GetVersion`, `TileMimeType`, `ThumbnailMimeType`, `Add` (the recorded a
 build-artifacts fixture), `ResolveBuildFile` (the recorded file; null for an unknown hash),
 `GetEntryTypes`, `CopyBuildArtifacts`, `GetPendingBuildInfo`, `IsBuildPending`, `MetaAdd`, `MetaSet`,
 `MetaGet`, `MetaUnset`, `MetaRemove`, `MetaList`, `MetaDump`, `Stac`, `StacItemCollection`,
-`GetRasterInfo`, `GetRasterMetadata`. The `pending-build-info` and `build-artifacts-pending` fixtures
+`GetRasterInfo`, `GetRasterMetadata`, `CleanupCache` (with no options: the recorded cleanup with libddb's default
+ages). The `pending-build-info` and `build-artifacts-pending` fixtures
 record another dataset: read them with `ContractFixture.Load(...)`.
 
 ## FakeDdbRuntime

@@ -393,8 +393,13 @@ public class FakeDdbWrapper : IDdbWrapper
 
     public virtual DdbCleanupResult Cleanup(string ddbPath) => throw Unsupported();
 
-    public virtual CacheCleanupResult CleanupCache(CacheCleanupOptions? options, CancellationToken cancellationToken) =>
-        throw Unsupported();
+    /// <summary>The recorded cleanup, with libddb's default ages (no options); other options have no fixture.</summary>
+    public virtual CacheCleanupResult CleanupCache(CacheCleanupOptions? options, CancellationToken cancellationToken)
+    {
+        var json = NativeDdbWrapper.ToCacheCleanupJson(options);
+        return Serve<CacheCleanupResult>(json == null ? "cache-cleanup" : null, $"CleanupCache({json ?? "null"})");
+    }
+
     public virtual List<RescanResult> RescanIndex(string ddbPath, RescanOptions? options = null) => throw Unsupported();
 
     public virtual List<CoverageResult> FindCoverage(string ddbPath, string geometryGeoJson, int? limit = null) =>
