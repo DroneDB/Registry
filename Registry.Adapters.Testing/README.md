@@ -239,6 +239,9 @@ when a file is missing or when an unlisted file is added, so the fixtures change
   vector changed.
 * 2026-11-24: DroneDB `7b98c904670f93ede6b081b8b8f98575038d287b` (the v2.11.0 release, libddb 2.11.0, ABI 2.11, the
   pinned build): vendor/ddb-tilers at its release v0.14.0. No fixture, schema or vector changed.
+* 2026-11-25: DroneDB `050bd97278ff5222fa17cae23130c75f9782a16c` (the v2.13.1 release, libddb 2.13.1, ABI 2.13, the
+  pinned build): `Contract/README.md` has the 2.13.1 entry (the `temp` kind of `DDBCleanupCache` also counts the
+  temporary COGs earlier versions left). No fixture, schema or vector changed.
 * 2026-11-25: DroneDB `13e8ff1d68c3115b1955e84652d11ffe17085e7c` (the v2.13.0 release, libddb 2.13.0, ABI 2.13, the
   pinned build): `capabilities` has `abi.minor` 13 and `DDBCleanupCache` in `symbols` and `cancellable`; the new
   `cache-cleanup` fixture and `cache-cleanup.schema.json` record `DDBCleanupCache`; `effective-config.schema.json`

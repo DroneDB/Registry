@@ -60,8 +60,9 @@
                    request merge commit for a PR run), e.g. ddb_2.0.0~git1813815_amd64.deb next to
                    ddb-2.0.0-Windows.zip. Remove the property with the move to the release.
 
-        Pinned now (2026-11-25): the DroneDB v2.13.0 release (ABI 2.13; the handshake requires ABI 2.13:
-        DdbAbi.Minor 13). 2.13.0 keeps no artefact cache: a user GeoTIFF is read in place once the raster helper has
+        Pinned now (2026-11-25): the DroneDB v2.13.1 release (ABI 2.13; the handshake requires ABI 2.13:
+        DdbAbi.Minor 13). 2.13.1 also removes the temporary COGs of earlier versions in the cache cleanup.
+        2.13.0 keeps no artefact cache: a user GeoTIFF is read in place once the raster helper has
         decoded it whole in its sandbox, any other raster through a copy that lives as long as its reader, and the
         tiles of a photo are drawn from the photo for each request; artefactCacheMb is accepted and has no effect.
         It adds DDBCleanupCache, the removal of the tiles, downloads, DSM tiles and leftover folders older than their
@@ -98,9 +99,9 @@
     -->
     <PropertyGroup>
         <DdbSource>release</DdbSource>
-        <DdbVersion>2.13.0</DdbVersion>
-        <DdbDebSha256>0a797f9f8c6619b172e99366ce48fa9299301bab7a2adf5ce029a5a7899d79d5</DdbDebSha256>
-        <DdbWindowsZipSha256>61f887529db78995e5fd649396b28b36999d2f7236231d19b8cf2cf06614c083</DdbWindowsZipSha256>
+        <DdbVersion>2.13.1</DdbVersion>
+        <DdbDebSha256>db410fd20a61c151c0bb85cf2171b08a0b78bb72f47a2cc79ea231c369929675</DdbDebSha256>
+        <DdbWindowsZipSha256>2503bd2a38bde6015c416d35774122c6f00ed1d78261d9a52aa72517fe88ca44</DdbWindowsZipSha256>
     </PropertyGroup>
 
 </Project>

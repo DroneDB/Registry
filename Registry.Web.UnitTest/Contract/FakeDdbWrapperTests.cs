@@ -123,9 +123,9 @@ public sealed class FakeDdbWrapperTests
     private static string[] ServedRuntimeFixtures() => [.. RuntimeCalls.Keys];
 
     /// <summary>
-    /// The recorded capabilities (fixtures/capabilities.json) are those of the libddb the Registry runs: ABI 2.11, which
+    /// The recorded capabilities (fixtures/capabilities.json) are those of the libddb the Registry runs: ABI 2.13, which
     /// the startup handshake accepts (major 2, minor at least <see cref="DdbAbi.Minor"/>), with every export Registry
-    /// calls. The fixtures are vendored from the DroneDB 2.13.0 release, which adds DDBCleanupCache
+    /// calls. The fixtures are vendored from the DroneDB 2.13.1 release (ABI 2.13 added DDBCleanupCache)
     /// (update-contract.sh).
     /// </summary>
     [Test]
