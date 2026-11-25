@@ -60,8 +60,13 @@
                    request merge commit for a PR run), e.g. ddb_2.0.0~git1813815_amd64.deb next to
                    ddb-2.0.0-Windows.zip. Remove the property with the move to the release.
 
-        Pinned now (2026-11-24): the DroneDB v2.12.0 release (ABI 2.12; the handshake requires ABI 2.12:
-        DdbAbi.Minor 12). 2.12.0 counts the statistics of the uploaded file of a GeoRaster in its COG build
+        Pinned now (2026-11-25): the DroneDB v2.13.0 release (ABI 2.13; the handshake requires ABI 2.13:
+        DdbAbi.Minor 13). 2.13.0 keeps no artefact cache: a user GeoTIFF is read in place once the raster helper has
+        decoded it whole in its sandbox, any other raster through a copy that lives as long as its reader, and the
+        tiles of a photo are drawn from the photo for each request; artefactCacheMb is accepted and has no effect.
+        It adds DDBCleanupCache, the removal of the tiles, downloads, DSM tiles and leftover folders older than their
+        ages, which the nightly cache cleanup job runs.
+        2.12.0 counts the statistics of the uploaded file of a GeoRaster in its COG build
         (the sourceStatistics member of the raster.cog artifact, which DDBBuildRasterStatistics also writes for an
         older build) and gives the value info of an entry with them (DDBGetRasterValueInfoEx2), so the first value
         info of a built raster reads no pixel.
@@ -93,9 +98,9 @@
     -->
     <PropertyGroup>
         <DdbSource>release</DdbSource>
-        <DdbVersion>2.12.0</DdbVersion>
-        <DdbDebSha256>ac20163e1dd044cc01217543e6af867d00ed0c4ac174f361984669540427261a</DdbDebSha256>
-        <DdbWindowsZipSha256>4531f3c3e336e370b2160a3d7d1c79d66feaa8b47444df00a43800c5c11f7cdd</DdbWindowsZipSha256>
+        <DdbVersion>2.13.0</DdbVersion>
+        <DdbDebSha256>0a797f9f8c6619b172e99366ce48fa9299301bab7a2adf5ce029a5a7899d79d5</DdbDebSha256>
+        <DdbWindowsZipSha256>61f887529db78995e5fd649396b28b36999d2f7236231d19b8cf2cf06614c083</DdbWindowsZipSha256>
     </PropertyGroup>
 
 </Project>
