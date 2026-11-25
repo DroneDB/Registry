@@ -238,6 +238,11 @@ when a file is missing or when an unlisted file is added, so the fixtures change
   vector changed.
 * 2026-11-24: DroneDB `7b98c904670f93ede6b081b8b8f98575038d287b` (the v2.11.0 release, libddb 2.11.0, ABI 2.11, the
   pinned build): vendor/ddb-tilers at its release v0.14.0. No fixture, schema or vector changed.
+* 2026-11-25: DroneDB `13e8ff1d68c3115b1955e84652d11ffe17085e7c` (the v2.13.0 release, libddb 2.13.0, ABI 2.13, the
+  pinned build): `capabilities` has `abi.minor` 13 and `DDBCleanupCache` in `symbols` and `cancellable`; the new
+  `cache-cleanup` fixture and `cache-cleanup.schema.json` record `DDBCleanupCache`; `effective-config.schema.json`
+  describes `artefactCacheMb` as a setting without effect (default 0); `Contract/README.md` has the 2.13.0 entry. No
+  other fixture, schema or vector changed.
 * 2026-11-24: DroneDB `5b2b8b9fae9c07c790eeb0bfd01297081f94bc34` (the v2.12.0 release, libddb 2.12.0, ABI 2.12, the
   pinned build): `capabilities` has `abi.minor` 12 and `DDBGetRasterValueInfoEx2` in `symbols` and `cancellable`;
   `build-artifacts` and `list-entries-ex` have `"sourceStatistics"` on the `raster.cog` artifact

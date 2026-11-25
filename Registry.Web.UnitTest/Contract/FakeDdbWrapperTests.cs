@@ -123,7 +123,7 @@ public sealed class FakeDdbWrapperTests
     /// <summary>
     /// The recorded capabilities (fixtures/capabilities.json) are those of the libddb the Registry runs: ABI 2.11, which
     /// the startup handshake accepts (major 2, minor at least <see cref="DdbAbi.Minor"/>), with every export Registry
-    /// calls. The fixtures are vendored from the DroneDB 2.12.0 release, which adds DDBGetRasterValueInfoEx2
+    /// calls. The fixtures are vendored from the DroneDB 2.13.0 release, which adds DDBCleanupCache
     /// (update-contract.sh).
     /// </summary>
     [Test]
@@ -131,7 +131,7 @@ public sealed class FakeDdbWrapperTests
     {
         var capabilities = new FakeDdbRuntime().Capabilities;
 
-        (capabilities.AbiMajor, capabilities.AbiMinor).ShouldBe((2, 12));
+        (capabilities.AbiMajor, capabilities.AbiMinor).ShouldBe((2, 13));
         capabilities.AbiMajor.ShouldBe(DdbAbi.Major);
         capabilities.AbiMinor.ShouldBeGreaterThanOrEqualTo(DdbAbi.Minor);
         DdbAbi.RequiredSymbols.Where(s => !capabilities.Symbols.Contains(s)).ShouldBeEmpty();
