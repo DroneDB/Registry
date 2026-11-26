@@ -42,6 +42,9 @@ public sealed record OrganizationImage(byte[] Content, string Extension, string 
             throw new BadRequestException($"The logo can be at most {maxBytes / 1024} KB");
     }
 
+    /// <summary>The refusal of a file that is not one of the types.</summary>
+    public const string NotAnImageMessage = "The file is not a PNG, JPEG, WebP or SVG image";
+
     /// <summary>
     /// Checks the bytes of an uploaded image and returns what to store. The type is found from the content (the
     /// signature of a PNG, a JPEG or a WebP, the root of an SVG), never from the name or the type the client sent, and
@@ -64,9 +67,15 @@ public sealed record OrganizationImage(byte[] Content, string Extension, string 
         {
             return Of(SvgSanitizer.Sanitize(bytes), "svg");
         }
+        catch (NotSvgDocumentException)
+        {
+            // Not one of the four types: say which types are taken, not why the bytes are no SVG (they were only
+            // tried as one because they are no PNG, JPEG or WebP)
+            throw new BadRequestException(NotAnImageMessage);
+        }
         catch (InvalidDataException ex)
         {
-            throw new BadRequestException($"The logo must be a PNG, JPEG, WebP or SVG image: {ex.Message}");
+            throw new BadRequestException($"This SVG cannot be used: {ex.Message}");
         }
     }
 

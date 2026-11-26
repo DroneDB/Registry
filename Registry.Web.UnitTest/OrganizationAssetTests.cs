@@ -90,6 +90,23 @@ public class OrganizationAssetTests
     }
 
     [Test]
+    public void AFileOfAnotherKind_IsToldTheTypesItMayBe_AndAnSvgThatIsRefused_WhyItIs()
+    {
+        // Tried as an SVG only because it is no PNG, JPEG or WebP: the refusal names the four types, not SVG parsing
+        foreach (var text in new[] { "this is not an image", "GIF89a.....", "<html><body/></html>", "<svg><rect></svg>" })
+            Should.Throw<BadRequestException>(() => Logo(Encoding.UTF8.GetBytes(text)), text)
+                .Message.ShouldBe(OrganizationImage.NotAnImageMessage);
+
+        var deep = new StringBuilder($"<svg xmlns=\"{SvgSanitizer.SvgNamespace}\">");
+        for (var i = 0; i < SvgSanitizer.MaxDepth + 2; i++) deep.Append("<g>");
+        for (var i = 0; i < SvgSanitizer.MaxDepth + 2; i++) deep.Append("</g>");
+        deep.Append("</svg>");
+
+        Should.Throw<BadRequestException>(() => Logo(Encoding.UTF8.GetBytes(deep.ToString())))
+            .Message.ShouldBe("This SVG cannot be used: The SVG is nested too deeply");
+    }
+
+    [Test]
     public void TheTypeOfAStoredFile_IsWhatItsFirstBytesSay_AndAnythingElseIsTheSvgTheUploadSanitised()
     {
         OrganizationImage.MediaTypeOfContent(Head(Png)).ShouldBe("image/png");

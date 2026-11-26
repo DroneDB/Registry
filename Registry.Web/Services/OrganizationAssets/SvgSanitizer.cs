@@ -77,7 +77,8 @@ public static partial class SvgSanitizer
     /// <summary>
     /// The safe copy of <paramref name="svg"/> (UTF-8, no byte order mark).
     /// </summary>
-    /// <exception cref="InvalidDataException">Not an SVG document (not XML, or its root is not <c>svg</c>), or nested deeper than <see cref="MaxDepth"/>.</exception>
+    /// <exception cref="NotSvgDocumentException">Not an SVG document (not XML, or its root is not <c>svg</c>).</exception>
+    /// <exception cref="InvalidDataException">An SVG nested deeper than <see cref="MaxDepth"/>.</exception>
     public static byte[] Sanitize(byte[] svg)
     {
         var readerSettings = new XmlReaderSettings
@@ -107,7 +108,7 @@ public static partial class SvgSanitizer
         }
         catch (XmlException ex)
         {
-            throw new InvalidDataException("The file is not a valid SVG document", ex);
+            throw new NotSvgDocumentException("The file is not a valid SVG document", ex);
         }
 
         return output.ToArray();
@@ -160,7 +161,7 @@ public static partial class SvgSanitizer
         }
 
         if (!rootWritten)
-            throw new InvalidDataException("The file is not an SVG document");
+            throw new NotSvgDocumentException("The file is not an SVG document");
     }
 
     // The root is svg in the SVG namespace; every other element is one of the allow-list, in that namespace
@@ -216,5 +217,16 @@ public static partial class SvgSanitizer
             .ToList();
 
         return kept.Count == 0 ? null : string.Join(';', kept);
+    }
+}
+
+/// <summary>
+/// The bytes are not an SVG document at all (not XML, or a root that is not <c>svg</c>), as opposed to an SVG that is
+/// refused for what it holds: an upload of another kind of file is told the types it may be, not why it is no SVG.
+/// </summary>
+public sealed class NotSvgDocumentException : Exception
+{
+    public NotSvgDocumentException(string message, Exception? inner = null) : base(message, inner)
+    {
     }
 }

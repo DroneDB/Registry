@@ -130,7 +130,7 @@ public class ReportLogoTests
                                      $"<svg {Ns}><text>&b;</text></svg>";
 
         // An entity of the document is not defined for the reader (ignored DTD): the document is refused, never expanded
-        Should.Throw<InvalidDataException>(() => SvgSanitizer.Sanitize(Utf8(billionLaughs)));
+        Should.Throw<NotSvgDocumentException>(() => SvgSanitizer.Sanitize(Utf8(billionLaughs)));
 
         const string external = "<!DOCTYPE svg SYSTEM \"http://evil.test/x.dtd\">";
         Sanitized($"{external}<svg {Ns}><rect width=\"1\"/></svg>").ShouldNotContain("evil.test");
@@ -149,9 +149,9 @@ public class ReportLogoTests
     [Test]
     public void ADocumentThatIsNotAnSvg_IsRefused()
     {
-        Should.Throw<InvalidDataException>(() => SvgSanitizer.Sanitize(Utf8("<svg><rect></svg>")));
-        Should.Throw<InvalidDataException>(() => SvgSanitizer.Sanitize(Utf8("<svg><rect/></svg>")), "no SVG namespace");
-        Should.Throw<InvalidDataException>(() => SvgSanitizer.Sanitize(Utf8($"<g {Ns}/>")), "the root is not svg");
+        Should.Throw<NotSvgDocumentException>(() => SvgSanitizer.Sanitize(Utf8("<svg><rect></svg>")));
+        Should.Throw<NotSvgDocumentException>(() => SvgSanitizer.Sanitize(Utf8("<svg><rect/></svg>")), "no SVG namespace");
+        Should.Throw<NotSvgDocumentException>(() => SvgSanitizer.Sanitize(Utf8($"<g {Ns}/>")), "the root is not svg");
     }
 
     #region Store
