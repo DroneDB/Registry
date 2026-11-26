@@ -15,6 +15,7 @@ using Registry.Web.Models.Configuration;
 using Registry.Web.Models.DTO;
 using Registry.Web.Services.Caching;
 using Registry.Web.Services.Datasets;
+using Registry.Web.Services.OrganizationAssets;
 using Registry.Web.Utilities;
 
 namespace Registry.Web.Services.Maintenance;
@@ -155,20 +156,38 @@ public sealed class DatasetSlugRepair
     }
 
     // Renames one organization (newOrgSlug != null) and/or some of its datasets in one transaction.
-    // The organization folder is moved first and moved back if the database update fails.
+    // The folders of the organization (its datasets, its files such as the logo) are moved first and moved back if the
+    // database update fails.
     private async Task ApplySlugFix(string orgSlug, string? newOrgSlug, IReadOnlyDictionary<string, string> dsRenames)
     {
-        // The options validation refuses to start without a datasets path
-        var datasetsPath = _storage.DatasetsPath!;
-        var oldPath = Path.Combine(datasetsPath, orgSlug);
-        var newPath = newOrgSlug != null ? Path.Combine(datasetsPath, newOrgSlug) : null;
-        var folderMoved = false;
+        var moved = new List<(string From, string To)>();
 
-        if (newPath != null && _fileSystem.FolderExists(oldPath))
+        if (newOrgSlug != null)
         {
-            _ddbManager.ReleaseConnections(oldPath);
-            MoveFolder(oldPath, newPath);
-            folderMoved = true;
+            // The options validation refuses to start without a datasets path
+            var datasets = FolderPair(_storage.DatasetsPath!, orgSlug, newOrgSlug);
+            var assets = FolderPair(OrganizationAssetStore.RootOf(_storage), orgSlug, newOrgSlug);
+
+            try
+            {
+                if (_fileSystem.FolderExists(datasets.From))
+                {
+                    _ddbManager.ReleaseConnections(datasets.From);
+                    MoveFolder(datasets.From, datasets.To);
+                    moved.Add(datasets);
+                }
+
+                if (_fileSystem.FolderExists(assets.From))
+                {
+                    MoveFolder(assets.From, assets.To);
+                    moved.Add(assets);
+                }
+            }
+            catch
+            {
+                MoveBack(moved);
+                throw;
+            }
         }
 
         try
@@ -182,14 +201,22 @@ public sealed class DatasetSlugRepair
         catch
         {
             _context.ChangeTracker.Clear();
-            // The folder moved only to a new path
-            if (folderMoved && newPath != null)
-                MoveFolder(newPath, oldPath);
+            MoveBack(moved);
             throw;
         }
 
         _logger.LogInformation("Fixed slugs of organization '{OrgSlug}' (new slug: {NewOrgSlug}, datasets: {Datasets})",
             orgSlug, newOrgSlug ?? orgSlug, string.Join(", ", dsRenames.Select(r => $"{r.Key} -> {r.Value}")));
+    }
+
+    private static (string From, string To) FolderPair(string root, string orgSlug, string newOrgSlug) =>
+        (Path.Combine(root, orgSlug), Path.Combine(root, newOrgSlug));
+
+    // The folders moved to a new path go back, the last one first
+    private void MoveBack(IEnumerable<(string From, string To)> moved)
+    {
+        foreach (var (from, to) in moved.Reverse())
+            MoveFolder(to, from);
     }
 
     // Database part of ApplySlugFix, run inside the transaction of the execution strategy
@@ -229,8 +256,8 @@ public sealed class DatasetSlugRepair
         await _context.SaveChangesAsync(ct);
     }
 
-    // The slug is the primary key: create the organization under the new slug, repoint its members and
-    // datasets, then drop the old row
+    // The slug is the primary key: create the organization under the new slug, repoint its members, datasets and
+    // report settings, then drop the old row
     private async Task<Organization> RepointOrganization(Organization org, IReadOnlyCollection<Dataset> datasets,
         string newSlug, CancellationToken ct)
     {
@@ -262,6 +289,15 @@ public sealed class DatasetSlugRepair
 
         foreach (var ds in datasets)
             ds.Organization = target;
+
+        // Its report settings are keyed by the slug and go with the old row (cascade): they move to the new one
+        var settings = await _context.OrganizationReportSettings.AsNoTracking()
+            .FirstOrDefaultAsync(r => r.OrganizationSlug == org.Slug, ct);
+        if (settings != null)
+        {
+            settings.OrganizationSlug = newSlug;
+            _context.OrganizationReportSettings.Add(settings);
+        }
 
         await _context.SaveChangesAsync(ct);
 

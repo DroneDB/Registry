@@ -133,6 +133,9 @@ POST /orgs/{orgSlug}/import/browse -> none [open] @ ImportController.BrowseImpor
 GET /orgs/{orgSlug}/import/sources -> none [open] @ ImportController.GetImportSources
 POST /orgs/{orgSlug}/import/verify -> none [open] @ ImportController.VerifyImport
 GET /orgs/{orgSlug}/locations -> none [open] @ DatasetLocationsController.GetDatasetLocations
+DELETE /orgs/{orgSlug}/logo -> Authorize [authenticated] @ OrganizationLogosController.Delete
+GET /orgs/{orgSlug}/logo -> none [open] @ OrganizationLogosController.Get
+PUT /orgs/{orgSlug}/logo -> Authorize [authenticated] @ OrganizationLogosController.Put
 GET /orgs/{orgSlug}/members -> none [open] @ OrganizationsController.GetMembers
 POST /orgs/{orgSlug}/members -> none [open] @ OrganizationsController.AddMember
 DELETE /orgs/{orgSlug}/members/{userName} -> none [open] @ OrganizationsController.RemoveMember

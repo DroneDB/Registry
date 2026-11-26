@@ -7,7 +7,7 @@ using System.Text;
 using System.Text.RegularExpressions;
 using System.Xml;
 
-namespace Registry.Web.Services.Reports;
+namespace Registry.Web.Services.OrganizationAssets;
 
 /// <summary>
 /// Makes an SVG that is safe to serve from the origin of the Hub: the document is copied through an allow-list, so what

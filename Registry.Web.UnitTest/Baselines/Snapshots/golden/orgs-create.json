@@ -11,6 +11,7 @@
     "creationDate": "<datetime:Z>",
     "owner": "golden-owner",
     "isPublic": false,
+    "logoUrl": null,
     "datasetCount": 0,
     "lastModified": "<datetime:Z>",
     "permissions": null

@@ -227,3 +227,6 @@ after the scheme's own challenge: production's JWT scheme adds `WWW-Authenticate
   the `Vector` entry type has the sidecars `xsd` and `gfs` (the schemas of a GML). Additive, no member changed.
 * The tool `rescan-entries` (a rescan of selected entries, which does not lock the dataset): `sys-features` lists it among the tools and
   `tasks-tools` gives its input schema (`paths`, `stopOnError`). Additive, no member changed.
+* Organizations: `logoUrl`, where the logo of the organization is (`/orgs/{slug}/logo?v={version}`), `null` when it has none
+  (the case in every golden here: `orgs-list`, `orgs-list-admin`, `orgs-get`, `orgs-create`, `orgs-public`). Additive, no
+  member changed (`OrganizationLogoHttpTests.TheLogoUrl_IsInEveryAnswerThatShowsTheOrganization`).

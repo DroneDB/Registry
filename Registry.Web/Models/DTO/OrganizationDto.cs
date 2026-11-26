@@ -49,6 +49,12 @@ public class OrganizationDto
     public bool IsPublic { get; set; }
 
     /// <summary>
+    /// Where the logo of the organization is, <c>/orgs/{slug}/logo?v={version}</c> (relative to the server; the version
+    /// changes when the logo is replaced). Null when the organization has no logo.
+    /// </summary>
+    public string? LogoUrl { get; set; }
+
+    /// <summary>
     /// How many datasets the organization has. Null for callers that are not its owner, an administrator or a
     /// member (and in the public list).
     /// </summary>
@@ -64,6 +70,12 @@ public class OrganizationDto
     /// The permissions of the current user in this organization.
     /// </summary>
     public OrganizationPermissionsDto? Permissions { get; set; }
+}
+
+/// <summary>The answer of a logo upload: where the logo is now (<see cref="OrganizationDto.LogoUrl"/>).</summary>
+public class OrganizationLogoDto
+{
+    public string? LogoUrl { get; set; }
 }
 
 /// <summary>

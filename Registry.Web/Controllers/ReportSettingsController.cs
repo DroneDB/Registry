@@ -9,6 +9,7 @@ using Registry.Web.Attributes;
 using Registry.Web.Exceptions;
 using Registry.Web.Models;
 using Registry.Web.Models.DTO;
+using Registry.Web.Services.OrganizationAssets;
 using Registry.Web.Services.Reports;
 using Registry.Web.Utilities;
 
@@ -166,7 +167,7 @@ public class ReportSettingsController : ControllerBaseEx
         if (file == null)
             throw new BadRequestException("The logo is the multipart field 'file'");
 
-        ReportLogo.EnsureSize(file.Length);
+        OrganizationImage.EnsureSize(file.Length, ReportLogoStore.MaxBytes);
         var content = new byte[file.Length];
         await using (var stream = file.OpenReadStream())
             await stream.ReadExactlyAsync(content, ct);

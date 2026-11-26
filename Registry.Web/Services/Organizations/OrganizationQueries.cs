@@ -27,15 +27,17 @@ public sealed class OrganizationQueries
     private readonly RegistryContext _context;
     private readonly ApplicationDbContext _appContext;
     private readonly IDdbManager _ddbManager;
+    private readonly OrganizationLogoLinks _logos;
 
     public OrganizationQueries(IAuthManager authManager, IDatasetAccessResolver access, RegistryContext context,
-        ApplicationDbContext appContext, IDdbManager ddbManager)
+        ApplicationDbContext appContext, IDdbManager ddbManager, OrganizationLogoLinks logos)
     {
         _authManager = authManager;
         _access = access;
         _context = context;
         _appContext = appContext;
         _ddbManager = ddbManager;
+        _logos = logos;
     }
 
     /// <summary>What the datasets of an organization say about it: how many there are and when the newest write to an index happened (null when no index could be read).</summary>
@@ -127,6 +129,7 @@ public sealed class OrganizationQueries
                 Name = org.Name,
                 IsPublic = org.IsPublic,
                 Owner = org.Owner,
+                LogoUrl = _logos.UrlOf(org.Slug),
                 Permissions = effectivePermission != null
                     ? OrganizationPermissionsDto.FromPermissions(effectivePermission.Value)
                     : org.IsPublic
@@ -167,6 +170,9 @@ public sealed class OrganizationQueries
 
         var organizations = await organizationsQuery.ToListAsync(ct);
 
+        foreach (var org in organizations)
+            org.LogoUrl = _logos.UrlOf(org.Slug!);
+
         await ResolveOwnerNamesAsync(organizations);
 
         return organizations;
@@ -178,7 +184,7 @@ public sealed class OrganizationQueries
     /// </summary>
     public async Task<OrganizationDto> ToDtoWithOwnerNameAsync(Organization org)
     {
-        var dto = org.ToDto();
+        var dto = org.ToDto(_logos.UrlOf(org.Slug));
         SetActivity(dto, EmptyActivity);
         await ResolveOwnerNamesAsync([dto]);
         return dto;

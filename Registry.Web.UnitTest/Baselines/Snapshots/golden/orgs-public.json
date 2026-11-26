@@ -12,6 +12,7 @@
       "creationDate": "<datetime:Z>",
       "owner": null,
       "isPublic": true,
+      "logoUrl": null,
       "datasetCount": null,
       "lastModified": null,
       "permissions": null

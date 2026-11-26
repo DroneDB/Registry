@@ -6,6 +6,7 @@ using NUnit.Framework;
 using Registry.Adapters;
 using Registry.Web.Exceptions;
 using Registry.Web.Models.Configuration;
+using Registry.Web.Services.OrganizationAssets;
 using Registry.Web.Services.Reports;
 using Shouldly;
 
@@ -23,23 +24,25 @@ public class ReportLogoTests
 
     private static byte[] WebP() => [.. "RIFF"u8, 4, 0, 0, 0, .. "WEBP"u8, 1, 2];
 
+    private static OrganizationImage Report(byte[] bytes) => OrganizationImage.Inspect(bytes, ReportLogoStore.MaxBytes);
+
     private static byte[] Utf8(string text) => Encoding.UTF8.GetBytes(text);
 
     [Test]
     public void TheTypeIsFoundFromTheContent()
     {
-        ReportLogo.Inspect(Png).ShouldSatisfyAllConditions(l => l.Extension.ShouldBe("png"),
+        Report(Png).ShouldSatisfyAllConditions(l => l.Extension.ShouldBe("png"),
             l => l.MediaType.ShouldBe("image/png"));
-        ReportLogo.Inspect(Jpeg).ShouldSatisfyAllConditions(l => l.Extension.ShouldBe("jpg"),
+        Report(Jpeg).ShouldSatisfyAllConditions(l => l.Extension.ShouldBe("jpg"),
             l => l.MediaType.ShouldBe("image/jpeg"));
-        ReportLogo.Inspect(WebP()).ShouldSatisfyAllConditions(l => l.Extension.ShouldBe("webp"),
+        Report(WebP()).ShouldSatisfyAllConditions(l => l.Extension.ShouldBe("webp"),
             l => l.MediaType.ShouldBe("image/webp"));
-        ReportLogo.Inspect(Utf8("<svg xmlns=\"http://www.w3.org/2000/svg\"/>")).ShouldSatisfyAllConditions(
+        Report(Utf8("<svg xmlns=\"http://www.w3.org/2000/svg\"/>")).ShouldSatisfyAllConditions(
             l => l.Extension.ShouldBe("svg"), l => l.MediaType.ShouldBe("image/svg+xml"));
     }
 
     [Test]
-    public void APngLogo_IsStoredAsItWas() => ReportLogo.Inspect(Png).Content.ShouldBe(Png);
+    public void APngLogo_IsStoredAsItWas() => Report(Png).Content.ShouldBe(Png);
 
     [TestCase("empty")]
     [TestCase("gif")]
@@ -58,15 +61,15 @@ public class ReportLogoTests
             "text" => Utf8("just words"),
             "riffNotWebP" => [.. "RIFF"u8, 4, 0, 0, 0, .. "WAVE"u8],
             "svgInsideHtml" => Utf8("<html xmlns=\"http://www.w3.org/1999/xhtml\"><svg xmlns=\"http://www.w3.org/2000/svg\"/></html>"),
-            _ => [.. Png, .. new byte[ReportLogo.MaxBytes]]
+            _ => [.. Png, .. new byte[ReportLogoStore.MaxBytes]]
         };
 
-        Should.Throw<BadRequestException>(() => ReportLogo.Inspect(bytes)).StatusCode.ShouldBe(400);
+        Should.Throw<BadRequestException>(() => Report(bytes)).StatusCode.ShouldBe(400);
     }
 
     [Test]
     public void ALogoOfExactlyTheLimit_IsAccepted() =>
-        Should.NotThrow(() => ReportLogo.Inspect([.. Png, .. new byte[ReportLogo.MaxBytes - Png.Length]]));
+        Should.NotThrow(() => Report([.. Png, .. new byte[ReportLogoStore.MaxBytes - Png.Length]]));
 
     private static string Sanitized(string svg) => Encoding.UTF8.GetString(SvgSanitizer.Sanitize(Utf8(svg)));
 
@@ -165,16 +168,19 @@ public class ReportLogoTests
             Directory.Delete(_root, true);
     }
 
-    private ReportLogoStore Store() => new(new FileSystem(),
-        Microsoft.Extensions.Options.Options.Create(new StorageOptions { StoragePath = _root }), NullLogger<ReportLogoStore>.Instance);
+    private OrganizationAssetStore Assets() => new(new FileSystem(),
+        Microsoft.Extensions.Options.Options.Create(new StorageOptions { StoragePath = _root }),
+        NullLogger<OrganizationAssetStore>.Instance);
+
+    private ReportLogoStore Store() => new(Assets());
 
     [Test]
     public void TheStore_PutsTheLogoOutsideTheBrandingFolder_InAFileOfEachUpload()
     {
         var store = Store();
 
-        var name = store.Save("acme", "standard", ReportLogo.Inspect(Png));
-        var again = store.Save("acme", "standard", ReportLogo.Inspect([.. Png, 9]));
+        var name = store.Save("acme", "standard", Report(Png));
+        var again = store.Save("acme", "standard", Report([.. Png, 9]));
 
         name.ShouldBeLogoOf("standard", "png");
         again.ShouldBeLogoOf("standard", "png");
@@ -191,17 +197,17 @@ public class ReportLogoTests
     public void TheStore_DeletesAFile_AndAnOrganizationsFolder()
     {
         var store = Store();
-        var a = store.Save("acme", "a", ReportLogo.Inspect(Png));
-        var b = store.Save("acme", "b", ReportLogo.Inspect(Jpeg));
-        var otherA = store.Save("other", "a", ReportLogo.Inspect(Png));
+        var a = store.Save("acme", "a", Report(Png));
+        var b = store.Save("acme", "b", Report(Jpeg));
+        var otherA = store.Save("other", "a", Report(Png));
 
         store.Delete("acme", a);
         store.Delete("acme", a);
         store.Find("acme", a).ShouldBeNull();
         store.Find("acme", b).ShouldNotBeNull();
 
-        store.DeleteOrganization("acme");
-        store.DeleteOrganization("acme");
+        Assets().DeleteOrganization("acme");
+        Assets().DeleteOrganization("acme");
         Directory.Exists(Path.Combine(_root, "org-assets", "acme")).ShouldBeFalse();
         store.Find("other", otherA).ShouldNotBeNull();
     }
@@ -242,7 +248,7 @@ public class ReportLogoTests
     [TestCase("a/b")]
     [TestCase("")]
     public void TheStore_RefusesAnOrganization_ThatIsNotASlug(string slug) =>
-        Should.Throw<ArgumentException>(() => Store().Save(slug, "standard", ReportLogo.Inspect(Png)));
+        Should.Throw<ArgumentException>(() => Store().Save(slug, "standard", Report(Png)));
 
     #endregion
 }

@@ -777,6 +777,25 @@ GET /orgs/{orgSlug}/locations
   401 application/problem+json ProblemDetails
   403 application/problem+json ProblemDetails
   404 application/problem+json ProblemDetails
+DELETE /orgs/{orgSlug}/logo
+  204
+  401 application/problem+json ProblemDetails
+  403 application/problem+json ProblemDetails
+  404 application/problem+json ProblemDetails
+GET /orgs/{orgSlug}/logo
+  200
+  304
+  401 application/problem+json ProblemDetails
+  403 application/problem+json ProblemDetails
+  404 application/problem+json ProblemDetails
+PUT /orgs/{orgSlug}/logo
+  body multipart/form-data object
+  200 application/json OrganizationLogoDto
+  400 application/problem+json ProblemDetails
+  401 application/problem+json ProblemDetails
+  403 application/problem+json ProblemDetails
+  404 application/problem+json ProblemDetails
+  413 application/problem+json ProblemDetails
 GET /orgs/{orgSlug}/members
   200 application/json array<OrganizationMemberDto>
   401 application/problem+json ProblemDetails
@@ -1338,7 +1357,8 @@ schema OgcApiTileSetDto { tileMatrixSetURI:string, links:array<OgcApiTileLinkDto
 schema OgcApiTileSetsDto { tilesets:array<OgcApiTileSetDto> }
 schema OgcConformanceDto { conformsTo:array<string> }
 schema OkDto { ok:boolean }
-schema OrganizationDto { slug:string, name:string, description:string, creationDate:string(date-time), owner:string, isPublic:boolean, datasetCount:integer(int32), lastModified:string(date-time), permissions:OrganizationPermissionsDto }
+schema OrganizationDto { slug:string, name:string, description:string, creationDate:string(date-time), owner:string, isPublic:boolean, logoUrl:string, datasetCount:integer(int32), lastModified:string(date-time), permissions:OrganizationPermissionsDto }
+schema OrganizationLogoDto { logoUrl:string }
 schema OrganizationMemberDto { userName:string, email:string, permissions:OrganizationPermissions, grantedAt:string(date-time), grantedBy:string }
 schema OrganizationPermissions {  }
 schema OrganizationPermissionsDto { canRead:boolean, canWrite:boolean, canDelete:boolean, canManageMembers:boolean }

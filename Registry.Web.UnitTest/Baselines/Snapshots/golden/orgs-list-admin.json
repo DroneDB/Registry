@@ -12,6 +12,7 @@
       "creationDate": "<datetime:Z>",
       "owner": "golden-owner",
       "isPublic": false,
+      "logoUrl": null,
       "datasetCount": 1,
       "lastModified": "<datetime:Z>",
       "permissions": {
@@ -28,6 +29,7 @@
       "creationDate": "<datetime:Z>",
       "owner": "golden-writer",
       "isPublic": false,
+      "logoUrl": null,
       "datasetCount": 1,
       "lastModified": "<datetime:Z>",
       "permissions": {
@@ -44,6 +46,7 @@
       "creationDate": "<datetime:Z>",
       "owner": null,
       "isPublic": true,
+      "logoUrl": null,
       "datasetCount": 1,
       "lastModified": "<datetime:Z>",
       "permissions": {
@@ -60,6 +63,7 @@
       "creationDate": "<datetime:Z>",
       "owner": "admin",
       "isPublic": false,
+      "logoUrl": null,
       "datasetCount": 0,
       "lastModified": "<datetime:Z>",
       "permissions": {

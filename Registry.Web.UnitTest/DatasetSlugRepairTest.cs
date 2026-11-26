@@ -41,8 +41,11 @@ public class DatasetSlugRepairTest : TestBase
 
     private const string BadOrg = "thomas-knig---aerial-data";
     private const string GoodOrg = "valid-org";
+    private const string ReportTemplates = """[{"id":"standard","name":"Standard","logo":"report-logo-standard.png"}]""";
+    private const string ReportLogoFile = "report-logo-standard.png";
 
     private string _datasetsPath = null!;
+    private string _storagePath = null!;
     private Mock<IDatasetListingInvalidator> _listings = null!;
     private Guid _badOrgDsRef;
     private Guid _goodOrgDsRef;
@@ -52,6 +55,8 @@ public class DatasetSlugRepairTest : TestBase
     {
         _datasetsPath = Path.Combine(Path.GetTempPath(), "fix-slugs-" + Guid.NewGuid());
         Directory.CreateDirectory(_datasetsPath);
+        _storagePath = Path.Combine(Path.GetTempPath(), "fix-slugs-storage-" + Guid.NewGuid());
+        Directory.CreateDirectory(_storagePath);
         _listings = new Mock<IDatasetListingInvalidator>();
     }
 
@@ -60,6 +65,8 @@ public class DatasetSlugRepairTest : TestBase
     {
         if (Directory.Exists(_datasetsPath))
             Directory.Delete(_datasetsPath, true);
+        if (Directory.Exists(_storagePath))
+            Directory.Delete(_storagePath, true);
     }
 
     [Test]
@@ -278,6 +285,129 @@ public class DatasetSlugRepairTest : TestBase
         _listings.Verify(l => l.ListingChangedAsync(GoodOrg, untouched), Times.Never);
     }
 
+    // The files of an organization (its logo, the logos of its report templates) are in a folder of the storage path named
+    // by its slug, and its report settings are a row keyed by the slug: both follow the organization to its new slug
+    [Test]
+    public async Task Apply_MovesTheFilesOfTheOrganization_AndKeepsItsReportSettings()
+    {
+        await using (var seed = CreateContext())
+        {
+            var result = await CreateManager(seed).FixInvalidSlugsAsync(dryRun: false);
+            result.Entries.ShouldAllBe(e => e.Status == "renamed");
+        }
+
+        var moved = AssetsOf("thomas-knig-aerial-data");
+        File.ReadAllText(Path.Combine(moved, "logo")).ShouldBe("the logo");
+        File.ReadAllText(Path.Combine(moved, ReportLogoFile)).ShouldBe("the report logo");
+        Directory.Exists(AssetsOf(BadOrg)).ShouldBeFalse();
+
+        await using var context = ReopenContext();
+        var settings = context.OrganizationReportSettings.AsNoTracking().ToArray();
+        settings.Select(r => r.OrganizationSlug).ShouldBe(["thomas-knig-aerial-data"]);
+        settings.Single().ShouldSatisfyAllConditions(
+            r => r.Templates.ShouldBe(ReportTemplates),
+            r => r.Schema.ShouldBe("{}"),
+            r => r.Version.ShouldBe(3),
+            r => r.UpdatedAt.ShouldBe(new DateTime(2026, 3, 4, 5, 6, 7, DateTimeKind.Utc)),
+            r => r.UpdatedBy.ShouldBe("owner"));
+    }
+
+    [Test]
+    public async Task Apply_OrganizationWithoutFiles_IsRenamedAsBefore()
+    {
+        await using (var seed = CreateContext())
+        {
+            Directory.Delete(AssetsOf(BadOrg), true);
+            seed.OrganizationReportSettings.RemoveRange(seed.OrganizationReportSettings);
+            await seed.SaveChangesAsync();
+
+            var result = await CreateManager(seed).FixInvalidSlugsAsync(dryRun: false);
+            result.Entries.ShouldAllBe(e => e.Status == "renamed");
+        }
+
+        Directory.Exists(AssetsOf("thomas-knig-aerial-data")).ShouldBeFalse("nothing was made up");
+        await using var context = ReopenContext();
+        context.OrganizationReportSettings.Any().ShouldBeFalse();
+        context.Organizations.Select(o => o.Slug).ShouldContain("thomas-knig-aerial-data");
+    }
+
+    [Test]
+    public async Task Apply_FolderOfFilesAlreadyAtTheNewSlug_FailsAndPutsTheDatasetsFolderBack()
+    {
+        await using (var seed = CreateContext())
+        {
+            // A folder of the new slug is in the way (made after the seed: the seed has the organization's files at its old slug)
+            Directory.CreateDirectory(AssetsOf("thomas-knig-aerial-data"));
+            var result = await CreateManager(seed).FixInvalidSlugsAsync(dryRun: false);
+
+            result.Entries.Where(e => e.OrganizationSlug == BadOrg).ShouldAllBe(e => e.Status == "failed");
+        }
+
+        // Both folders are where they were: the datasets moved first and came back
+        File.Exists(Path.Combine(_datasetsPath, BadOrg, _badOrgDsRef.ToString(), "marker")).ShouldBeTrue();
+        Directory.Exists(Path.Combine(_datasetsPath, "thomas-knig-aerial-data")).ShouldBeFalse();
+        File.ReadAllText(Path.Combine(AssetsOf(BadOrg), "logo")).ShouldBe("the logo");
+
+        await using var context = ReopenContext();
+        context.Organizations.Select(o => o.Slug).ShouldContain(BadOrg);
+        context.OrganizationReportSettings.Select(r => r.OrganizationSlug).ShouldBe([BadOrg]);
+    }
+
+    [Test]
+    public async Task Apply_DatabaseFailure_PutsBothFoldersBack()
+    {
+        await using (var seed = CreateContext()) { }
+
+        await using (var context = ReopenContext(new FailEverySave()))
+        {
+            var result = await CreateManager(context).FixInvalidSlugsAsync(dryRun: false);
+
+            result.Entries.Where(e => e.OrganizationSlug == BadOrg).ShouldAllBe(e => e.Status == "failed");
+        }
+
+        File.Exists(Path.Combine(_datasetsPath, BadOrg, _badOrgDsRef.ToString(), "marker")).ShouldBeTrue();
+        File.ReadAllText(Path.Combine(AssetsOf(BadOrg), "logo")).ShouldBe("the logo");
+        Directory.Exists(Path.Combine(_datasetsPath, "thomas-knig-aerial-data")).ShouldBeFalse();
+        Directory.Exists(AssetsOf("thomas-knig-aerial-data")).ShouldBeFalse();
+
+        await using var check = ReopenContext();
+        check.Organizations.Select(o => o.Slug).ShouldContain(BadOrg);
+        check.OrganizationReportSettings.Select(r => r.OrganizationSlug).ShouldBe([BadOrg]);
+    }
+
+    // The file system and the database of the case-only rename: the files hop through a temporary name as the datasets do
+    [Test]
+    public async Task Apply_CaseOnlyRename_MovesTheFilesAndTheReportSettings()
+    {
+        await using (var seed = CreateContext())
+        {
+            seed.Organizations.Add(new Organization
+            {
+                Slug = "Upper-Case", Name = "Upper", CreationDate = DateTime.UtcNow, OwnerId = "owner"
+            });
+            seed.OrganizationReportSettings.Add(new OrganizationReportSettings
+            {
+                OrganizationSlug = "Upper-Case", Templates = "[]", Schema = "{}", Version = 1,
+                UpdatedAt = DateTime.UtcNow, UpdatedBy = "owner"
+            });
+            await seed.SaveChangesAsync();
+            Directory.CreateDirectory(AssetsOf("Upper-Case"));
+            File.WriteAllText(Path.Combine(AssetsOf("Upper-Case"), "logo"), "upper logo");
+
+            await CreateManager(seed).FixInvalidSlugsAsync(dryRun: false);
+        }
+
+        // Actual on-disk names: Directory.Exists ignores case on Windows and macOS
+        var folders = Directory.GetDirectories(Path.Combine(_storagePath, "org-assets")).Select(Path.GetFileName).ToArray();
+        folders.ShouldContain("upper-case");
+        folders.ShouldNotContain("Upper-Case");
+        File.ReadAllText(Path.Combine(AssetsOf("upper-case"), "logo")).ShouldBe("upper logo");
+
+        await using var context = ReopenContext();
+        context.OrganizationReportSettings.Select(r => r.OrganizationSlug).ToArray()
+            .ShouldBe(["thomas-knig-aerial-data", "upper-case"], ignoreOrder: true);
+    }
+
     [Test]
     public async Task DryRun_RenewsNoListing()
     {
@@ -287,6 +417,8 @@ public class DatasetSlugRepairTest : TestBase
 
         _listings.VerifyNoOtherCalls();
     }
+
+    private string AssetsOf(string org) => Path.Combine(_storagePath, "org-assets", org);
 
     #region Setup
 
@@ -353,18 +485,30 @@ public class DatasetSlugRepairTest : TestBase
             JobId = "done-job", OrgSlug = BadOrg, DsSlug = "jane--eric", CurrentState = "Succeeded",
             CreatedAtUtc = DateTime.UtcNow
         });
+        context.OrganizationReportSettings.Add(new OrganizationReportSettings
+        {
+            OrganizationSlug = BadOrg, Templates = ReportTemplates, Schema = "{}", Version = 3,
+            UpdatedAt = new DateTime(2026, 3, 4, 5, 6, 7, DateTimeKind.Utc), UpdatedBy = "owner"
+        });
         context.SaveChanges();
 
         var dsFolder = Path.Combine(_datasetsPath, BadOrg, _badOrgDsRef.ToString());
         Directory.CreateDirectory(dsFolder);
         File.WriteAllText(Path.Combine(dsFolder, "marker"), "x");
 
+        // The files of the organization: its logo, and the logo of a report template
+        var assets = AssetsOf(BadOrg);
+        Directory.CreateDirectory(assets);
+        File.WriteAllText(Path.Combine(assets, "logo"), "the logo");
+        File.WriteAllText(Path.Combine(assets, ReportLogoFile), "the report logo");
+
         return context;
     }
 
     private DatasetSlugRepair CreateManager(RegistryContext context) =>
         new(context, new Mock<IDdbManager>().Object, new FileSystem(),
-            Microsoft.Extensions.Options.Options.Create(new StorageOptions { DatasetsPath = _datasetsPath }),
+            Microsoft.Extensions.Options.Options.Create(
+                new StorageOptions { DatasetsPath = _datasetsPath, StoragePath = _storagePath }),
             _listings.Object, CreateTestLogger<DatasetSlugRepair>());
 
     private sealed class TransientTestException() : Exception("Transient test failure");
@@ -401,6 +545,14 @@ public class DatasetSlugRepairTest : TestBase
             Failures++;
             throw new TransientTestException();
         }
+    }
+
+    // A failure the database does not recover from (not transient: nothing replays it)
+    private sealed class FailEverySave : SaveChangesInterceptor
+    {
+        public override ValueTask<InterceptionResult<int>> SavingChangesAsync(DbContextEventData eventData,
+            InterceptionResult<int> result, CancellationToken cancellationToken = default) =>
+            throw new InvalidOperationException("The database refuses the save");
     }
 
     // Every commit reaches the database, then reports a transient failure (a connection lost on the reply)

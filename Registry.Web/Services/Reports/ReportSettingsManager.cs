@@ -10,6 +10,7 @@ using Registry.Web.Data.Models;
 using Registry.Web.Exceptions;
 using Registry.Web.Models.DTO;
 using Registry.Web.Services.Managers;
+using Registry.Web.Services.OrganizationAssets;
 using Registry.Web.Services.Organizations;
 using Registry.Web.Services.Ports;
 using Registry.Web.Utilities;
@@ -131,7 +132,7 @@ public sealed class ReportSettingsManager
 
     /// <summary>
     /// Sets the logo of a stored template (administrators of the organization): the bytes are checked
-    /// (<see cref="ReportLogo.Inspect"/>), the version goes up.
+    /// (<see cref="OrganizationImage.Inspect"/>), the version goes up.
     /// </summary>
     /// <exception cref="NotFoundException">The template is not stored (the Standard one counts as stored).</exception>
     public async Task<ReportLogoDto> SetLogo(string orgSlug, string templateId, byte[] content,
@@ -141,7 +142,7 @@ public sealed class ReportSettingsManager
 
         var current = await LoadAsync(orgSlug, tracking: true, ct);
         var template = StoredTemplate(current, templateId);
-        var logo = ReportLogo.Inspect(content);
+        var logo = OrganizationImage.Inspect(content, ReportLogoStore.MaxBytes);
 
         // The file is this request's own (ReportLogoStore.Save): an upload that loses the race to another deletes only it,
         // never the file the winner's settings name

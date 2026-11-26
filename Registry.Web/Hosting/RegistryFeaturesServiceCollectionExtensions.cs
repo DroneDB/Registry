@@ -19,6 +19,7 @@ using Registry.Web.Services.Managers;
 using Registry.Web.Services.Managers.Wcs;
 using Registry.Web.Services.Managers.Wfs;
 using Registry.Web.Services.Objects;
+using Registry.Web.Services.OrganizationAssets;
 using Registry.Web.Services.Organizations;
 using Registry.Web.Services.PlatformTasks;
 using Registry.Web.Services.Ports;
@@ -64,7 +65,10 @@ public static class RegistryFeaturesServiceCollectionExtensions
         services.AddScoped<OrganizationMerger>();
         services.AddScoped<OrganizationMembers>();
         services.AddScoped<OrganizationRights>();
+        services.AddSingleton<OrganizationAssetStore>();
         services.AddSingleton<ReportLogoStore>();
+        services.AddSingleton<OrganizationLogoLinks>();
+        services.AddScoped<OrganizationLogos>();
         services.AddScoped<ReportSettingsManager>();
         services.AddScoped<IDatasetsManager, DatasetsManager>();
         services.AddScoped<DatasetQueries>();

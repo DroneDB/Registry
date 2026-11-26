@@ -137,6 +137,7 @@ namespace Registry.Web.Utilities;
 [JsonSerializable(typeof(OkDto))]
 [JsonSerializable(typeof(ObservedBaseUrl))]
 [JsonSerializable(typeof(OrganizationDto))]
+[JsonSerializable(typeof(OrganizationLogoDto))]
 [JsonSerializable(typeof(OrganizationMemberDto))]
 [JsonSerializable(typeof(OrganizationReportSettingsDto))]
 [JsonSerializable(typeof(OrganizationPermissionsDto))]

@@ -23,6 +23,7 @@ using Registry.Ports.DroneDB;
 using Registry.Web.Data;
 using Registry.Web.Data.Models;
 using Registry.Web.Models.DTO;
+using Registry.Web.Services.OrganizationAssets;
 using Registry.Web.Services.Reports;
 using Registry.Web.Test.Support;
 using Registry.Web.Utilities;
@@ -68,8 +69,8 @@ public sealed class ReportSettingsHttpTests : IDisposable
             services =>
             {
                 services.AddSingleton<ILogEventSink>(_logs);
-                // The logo store of the Registry, on a file system that runs the step a test sets just before it writes
-                services.AddSingleton(sp => ActivatorUtilities.CreateInstance<ReportLogoStore>(sp,
+                // The store of the files of the organizations, on a file system that runs the step a test sets just before it writes
+                services.AddSingleton(sp => ActivatorUtilities.CreateInstance<OrganizationAssetStore>(sp,
                     SteppedFileSystem.Over(sp.GetRequiredService<IFileSystem>(),
                         () => Interlocked.Exchange(ref _beforeLogoWrite, null))));
             });
@@ -566,7 +567,7 @@ public sealed class ReportSettingsHttpTests : IDisposable
                      Encoding.UTF8.GetBytes("GIF89a....."),
                      Encoding.UTF8.GetBytes("<html><script>alert(1)</script></html>"),
                      [],
-                     [.. Png, .. new byte[ReportLogo.MaxBytes]]
+                     [.. Png, .. new byte[ReportLogoStore.MaxBytes]]
                  })
             (await PutLogo(org, "standard", bytes)).Status.ShouldBe(400);
 
@@ -583,7 +584,7 @@ public sealed class ReportSettingsHttpTests : IDisposable
     {
         var org = await NewOrganizationAsync();
 
-        (await PutLogo(org, "standard", [.. Png, .. new byte[ReportLogo.MaxBytes - Png.Length]])).Status.ShouldBe(200);
+        (await PutLogo(org, "standard", [.. Png, .. new byte[ReportLogoStore.MaxBytes - Png.Length]])).Status.ShouldBe(200);
         (await PutLogo(org, "standard", [.. Png, .. new byte[2 * 1024 * 1024]])).Status.ShouldBe(413);
     }
 

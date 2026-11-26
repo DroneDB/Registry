@@ -3440,6 +3440,7 @@
       "creationDate": "2026-10-21T07:31:17.123Z",
       "owner": "Owner-text",
       "isPublic": true,
+      "logoUrl": "LogoUrl-text",
       "datasetCount": 42,
       "lastModified": "2026-10-21T07:31:17Z",
       "permissions": {
@@ -3456,9 +3457,18 @@
       "creationDate": "0001-01-01T00:00:00Z",
       "owner": null,
       "isPublic": false,
+      "logoUrl": null,
       "datasetCount": null,
       "lastModified": null,
       "permissions": null
+    }
+  },
+  "Registry.Web.Models.DTO.OrganizationLogoDto": {
+    "full": {
+      "logoUrl": "LogoUrl-text"
+    },
+    "sparse": {
+      "logoUrl": null
     }
   },
   "Registry.Web.Models.DTO.OrganizationMemberDto": {

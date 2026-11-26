@@ -31,7 +31,9 @@ public static class Extenders
         };
     }
 
-    public static OrganizationDto ToDto(this Organization organization)
+    /// <param name="organization">The organization.</param>
+    /// <param name="logoUrl">Where its logo is (<see cref="OrganizationDto.LogoUrl"/>), null when it has none.</param>
+    public static OrganizationDto ToDto(this Organization organization, string? logoUrl = null)
     {
         return new OrganizationDto
         {
@@ -40,7 +42,8 @@ public static class Extenders
             Description = organization.Description,
             CreationDate = organization.CreationDate,
             Owner = organization.OwnerId,
-            IsPublic = organization.IsPublic
+            IsPublic = organization.IsPublic,
+            LogoUrl = logoUrl
         };
     }
 
