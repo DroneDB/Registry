@@ -15,6 +15,9 @@ public static class RenderCacheKeys
     /// <summary>The plain thumbnail of <paramref name="pixels"/> px.</summary>
     public static object[] Thumbnail(string hash, long version, int pixels) => [hash, version, pixels];
 
+    /// <summary>The thumbnail of <paramref name="pixels"/> px of the dataset cover at <paramref name="path"/>.</summary>
+    public static object[] DatasetThumbnail(string path, string hash, int pixels) => [path, hash, pixels];
+
     /// <summary>The thumbnail of <paramref name="pixels"/> px with the visualization <paramref name="visualization"/>.</summary>
     public static object[] ThumbnailEx(string hash, long version, int pixels, string visualization) =>
         [hash, version, pixels, visualization];

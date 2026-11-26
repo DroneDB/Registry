@@ -181,23 +181,28 @@ public sealed class ObjectRenderService : IObjectRenderService
     {
         var ddb = await _sources.OpenReadableAsync(orgSlug, dsSlug, ct);
 
-        // The first candidate the dataset has
-        var thumbnailPath = _options.Candidates.FirstOrDefault(ddb.EntryExists);
-        if (thumbnailPath == null)
+        // The first candidate the dataset has (a folder of that name is not a cover)
+        var cover = _options.Candidates.Select(ddb.GetEntry).FirstOrDefault(entry => entry is { Hash: not null });
+        if (cover == null)
             return null;
 
         var pixels = ClampSize(size);
         var category = ForDatasetThumbnail(orgSlug, dsSlug);
+        // The path and the hash of the cover are in the key: a new cover, under the name of the old one too, is read
+        // from an entry of its own. The in-memory cache cannot remove a category, so a key without the hash served
+        // the render of the old cover until it expired.
+        var key = RenderCacheKeys.DatasetThumbnail(cover.Path, cover.FileHash(), pixels);
 
         if (recreate)
         {
             _logger.LogDebug("Removing cached dataset thumbnail for {OrgSlug}/{DsSlug}", orgSlug, dsSlug);
-            await _cache.RemoveByCategoryAsync(MagicStrings.ThumbnailCacheSeed, category);
+            // The key of the read below, otherwise nothing is removed
+            await _cache.RemoveAsync(MagicStrings.ThumbnailCacheSeed, category, key);
         }
 
-        var localPath = ddb.GetLocalPath(thumbnailPath);
-        var data = await _cache.GetAsync(MagicStrings.ThumbnailCacheSeed, category, ct, thumbnailPath, pixels,
-            new Func<CancellationToken, Task<byte[]>>(token => RenderThumbnailAsync(localPath, pixels, token)));
+        var localPath = ddb.GetLocalPath(cover.Path);
+        var data = await _cache.GetAsync(MagicStrings.ThumbnailCacheSeed, category, ct,
+            key.WithRender(token => RenderThumbnailAsync(localPath, pixels, token)));
 
         return new StorageDataDto { Name = "thumbnail.webp", Data = data, ContentType = _ddbWrapper.ThumbnailMimeType };
     }

@@ -426,12 +426,53 @@ public class ObjectsManagerThumbnailTests : TestBase
     [Test]
     public async Task ADatasetThumbnailSizeAboveTheBound_IsRenderedAtTheBound()
     {
-        _ddbMock.Setup(x => x.EntryExists("thumbnail.webp")).Returns(true);
+        SetupEntry("thumbnail.webp", EntryType.Image, "cover1");
 
         await CreateManager().Renders.GenerateThumbnailDataAsync(OrgSlug, DsSlug, null, 100_000);
 
         _thumbsMock.Verify(t => t.GenerateThumbnailAsync(It.IsAny<string>(), 4096, It.IsAny<Stream>(),
             It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    [Test]
+    public async Task ADatasetCover_ReplacedUnderTheSameName_IsRenderedAgain()
+    {
+        SetupEntry("thumbnail.jpg", EntryType.Image, "cover1");
+        var renders = CreateManager(RealRenderCache()).Renders;
+
+        await renders.GenerateThumbnailDataAsync(OrgSlug, DsSlug, null, 256);
+        await renders.GenerateThumbnailDataAsync(OrgSlug, DsSlug, null, 256);
+        ThumbnailRenders().ShouldBe(1, "the same cover is rendered once");
+
+        // A new image written over thumbnail.jpg: the in-memory cache cannot drop the category of the dataset thumbnail
+        SetupEntry("thumbnail.jpg", EntryType.Image, "cover2");
+        await renders.GenerateThumbnailDataAsync(OrgSlug, DsSlug, null, 256);
+        ThumbnailRenders().ShouldBe(2, "the new cover is not served the render of the old one");
+    }
+
+    [Test]
+    public async Task ADatasetCover_IsTheFirstCandidateThatIsAFile()
+    {
+        _ddbMock.Setup(x => x.GetEntry("thumbnail.webp")).Returns(new Entry { Path = "thumbnail.webp", Type = EntryType.Directory });
+        SetupEntry("cover.png", EntryType.Image, "cover1");
+
+        var data = await CreateManager().Renders.GenerateThumbnailDataAsync(OrgSlug, DsSlug, null, 256);
+
+        data.ShouldNotBeNull();
+        _thumbsMock.Verify(t => t.GenerateThumbnailAsync(Path.Combine(DatasetFolder, "cover.png"), 256, It.IsAny<Stream>(),
+            It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    [Test]
+    public async Task ARecreatedDatasetThumbnail_IsRenderedAgain()
+    {
+        SetupEntry("thumbnail.webp", EntryType.Image, "cover1");
+        var renders = CreateManager(RealRenderCache()).Renders;
+
+        await renders.GenerateThumbnailDataAsync(OrgSlug, DsSlug, null, 256);
+        await renders.GenerateThumbnailDataAsync(OrgSlug, DsSlug, null, 256, recreate: true);
+
+        ThumbnailRenders().ShouldBe(2, "the removal reached the entry the read stored, with the in-memory cache too");
     }
 
     [Test]
