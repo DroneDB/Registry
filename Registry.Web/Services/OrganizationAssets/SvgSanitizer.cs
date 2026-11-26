@@ -18,7 +18,9 @@ namespace Registry.Web.Services.OrganizationAssets;
 /// </summary>
 /// <remarks>
 /// It reads and writes as a stream, element by element, so a deeply nested document cannot exhaust the stack; the
-/// depth is bounded as well.
+/// depth is bounded as well. The style sheets of the document are not kept, but what their class rules paint is: an
+/// element gets the declarations of its classes in its <c>style</c> attribute (<see cref="SvgClassStyles"/>), through the
+/// same allow-list as a <c>style</c> of its own, so a logo exported with classes (as design tools do) keeps its colours.
 /// </remarks>
 public static partial class SvgSanitizer
 {
@@ -100,10 +102,11 @@ public static partial class SvgSanitizer
 
         try
         {
+            var classStyles = SvgClassStyles.Parse(StyleSheets(svg, readerSettings));
             using (var reader = XmlReader.Create(new MemoryStream(svg), readerSettings))
             using (var writer = XmlWriter.Create(output, writerSettings))
             {
-                Copy(reader, writer);
+                Copy(reader, writer, classStyles);
             }
         }
         catch (XmlException ex)
@@ -114,7 +117,36 @@ public static partial class SvgSanitizer
         return output.ToArray();
     }
 
-    private static void Copy(XmlReader reader, XmlWriter writer)
+    // The text of the style elements of the document, in their order: a first pass, as a sheet may come after the
+    // elements it paints
+    private static string StyleSheets(byte[] svg, XmlReaderSettings settings)
+    {
+        var sheets = new StringBuilder();
+        var styleDepth = -1;
+        using var reader = XmlReader.Create(new MemoryStream(svg), settings);
+        while (reader.Read())
+        {
+            EnsureDepth(reader);
+            switch (reader.NodeType)
+            {
+                case XmlNodeType.Element when styleDepth < 0 && !reader.IsEmptyElement &&
+                                              reader.LocalName == "style" && reader.NamespaceURI == SvgNamespace:
+                    styleDepth = reader.Depth;
+                    break;
+                case XmlNodeType.Text or XmlNodeType.CDATA when styleDepth >= 0:
+                    sheets.Append(reader.Value);
+                    break;
+                case XmlNodeType.EndElement when reader.Depth == styleDepth:
+                    styleDepth = -1;
+                    sheets.Append('\n');
+                    break;
+            }
+        }
+
+        return sheets.ToString();
+    }
+
+    private static void Copy(XmlReader reader, XmlWriter writer, SvgClassStyles classStyles)
     {
         var open = new Stack<string>();
         var rootWritten = false;
@@ -122,8 +154,7 @@ public static partial class SvgSanitizer
         reader.Read();
         while (!reader.EOF)
         {
-            if (reader.Depth > MaxDepth)
-                throw new InvalidDataException("The SVG is nested too deeply");
+            EnsureDepth(reader);
 
             switch (reader.NodeType)
             {
@@ -136,7 +167,7 @@ public static partial class SvgSanitizer
                     }
 
                     rootWritten = true;
-                    WriteElement(reader, writer);
+                    WriteElement(reader, writer, classStyles);
                     if (reader.IsEmptyElement)
                         writer.WriteEndElement();
                     else
@@ -164,20 +195,35 @@ public static partial class SvgSanitizer
             throw new NotSvgDocumentException("The file is not an SVG document");
     }
 
+    private static void EnsureDepth(XmlReader reader)
+    {
+        if (reader.Depth > MaxDepth)
+            throw new InvalidDataException("The SVG is nested too deeply");
+    }
+
     // The root is svg in the SVG namespace; every other element is one of the allow-list, in that namespace
     private static bool IsKept(XmlReader reader, bool rootWritten) =>
         reader.NamespaceURI == SvgNamespace && Elements.Contains(reader.LocalName) &&
         (rootWritten || reader.LocalName == "svg");
 
-    private static void WriteElement(XmlReader reader, XmlWriter writer)
+    private static void WriteElement(XmlReader reader, XmlWriter writer, SvgClassStyles classStyles)
     {
         var element = reader.LocalName;
         writer.WriteStartElement(element, SvgNamespace);
 
+        string? classes = null, style = null;
         if (reader.MoveToFirstAttribute())
         {
             do
             {
+                // The class and the style make one style attribute, written once the others are
+                if (reader.NamespaceURI == "" && reader.LocalName is "class" or "style")
+                {
+                    if (reader.LocalName == "class") classes = reader.Value;
+                    else style = reader.Value;
+                    continue;
+                }
+
                 var value = AttributeValue(element, reader);
                 if (value != null)
                     writer.WriteAttributeString(reader.LocalName, value);
@@ -185,6 +231,10 @@ public static partial class SvgSanitizer
 
             reader.MoveToElement();
         }
+
+        var safeStyle = SafeStyle(classStyles.DeclarationsOf(classes).Concat(SvgClassStyles.Declarations(style)));
+        if (safeStyle != null)
+            writer.WriteAttributeString("style", safeStyle);
     }
 
     // The value to write for the attribute the reader is on, or null to drop it
@@ -199,24 +249,28 @@ public static partial class SvgSanitizer
         if (attribute.NamespaceURI != "")
             return null;
 
-        if (name == "style")
-            return SafeStyle(value);
-
         return Attributes.Contains(name) && IsSafe(value) ? value : null;
     }
 
     private static bool IsSafe(string value) => !ExternalUrl().IsMatch(value) && !ActiveValue().IsMatch(value);
 
-    // The declarations of a style attribute that are painting and safe; null when none is left
-    private static string? SafeStyle(string style)
+    // The declarations that are painting and safe, as a style attribute (a later one of a property wins, as in CSS);
+    // null when none is left
+    private static string? SafeStyle(IEnumerable<KeyValuePair<string, string>> declarations)
     {
-        var kept = style.Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
-            .Select(declaration => declaration.Split(':', 2, StringSplitOptions.TrimEntries))
-            .Where(parts => parts.Length == 2 && PresentationProperties.Contains(parts[0]) && IsSafe(parts[1]))
-            .Select(parts => $"{parts[0]}:{parts[1]}")
-            .ToList();
+        var kept = new Dictionary<string, string>(StringComparer.Ordinal);
+        var order = new List<string>();
+        foreach (var (property, value) in declarations)
+        {
+            if (!PresentationProperties.Contains(property) || !IsSafe(value))
+                continue;
+            if (kept.TryAdd(property, value))
+                order.Add(property);
+            else
+                kept[property] = value;
+        }
 
-        return kept.Count == 0 ? null : string.Join(';', kept);
+        return order.Count == 0 ? null : string.Join(';', order.Select(property => $"{property}:{kept[property]}"));
     }
 }
 

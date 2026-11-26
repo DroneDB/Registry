@@ -89,6 +89,48 @@ public class ReportLogoTests
         result.ShouldContain(">Acme</text>");
     }
 
+    [Test]
+    public void AnSvgPaintedByClasses_KeepsItsColours_OnTheElements()
+    {
+        // As a design tool exports a logo: the colours are rules of classes in a style sheet of the document
+        var result = Sanitized($"<svg {Ns} viewBox=\"0 0 10 10\"><defs><style>.cls-1{{fill:#0059df;}}" +
+                               ".cls-2,.cls-3{fill:#c90505;}.cls-3{opacity:0.7;}.cls-3{isolation:isolate;}</style></defs>" +
+                               "<path class=\"cls-1\" d=\"M0 0\"/><path class=\"cls-3\" d=\"M1 1\"/><path class=\"cls-2\" d=\"M2 2\"/></svg>");
+
+        result.ShouldContain("<path d=\"M0 0\" style=\"fill:#0059df\"");
+        result.ShouldContain("<path d=\"M1 1\" style=\"fill:#c90505;opacity:0.7\"");
+        result.ShouldContain("<path d=\"M2 2\" style=\"fill:#c90505\"");
+        result.ShouldNotContain("<style");
+        result.ShouldNotContain("class=");
+        result.ShouldNotContain("isolation");
+    }
+
+    [Test]
+    public void AnSvgPaintedByClasses_LetsTheStyleOfTheElementWin_AndTheLaterRule()
+    {
+        var result = Sanitized($"<svg {Ns}><rect class=\"a b\" style=\"stroke:#000\" width=\"1\"/>" +
+                               "<style>.b{fill:#222;stroke:#fff}.a{fill:#111}</style></svg>");
+
+        // The sheet after the element still paints it; .a comes later than .b; the element's own stroke wins
+        result.ShouldContain("style=\"fill:#111;stroke:#000\"");
+    }
+
+    [TestCase(".a{fill:url(http://evil.test/x)}", "evil.test")]
+    [TestCase(".a{fill:u\\72l(http://evil.test/x)}", "evil.test")]
+    [TestCase("rect{fill:#123456}", "123456")]
+    [TestCase("svg .a{fill:#123456}", "123456")]
+    [TestCase("@media print{.a{fill:#123456}}", "123456")]
+    [TestCase("@import url(http://evil.test/x.css);.b{fill:#000}", "evil.test")]
+    [TestCase("/* .a{fill:#123456} */", "123456")]
+    [TestCase(".a{behavior:url(x.htc)}", "behavior")]
+    public void AnSvgPaintedByClasses_TakesOnlyTheSafePaintOfAClassRule(string sheet, string forbidden)
+    {
+        var result = Sanitized($"<svg {Ns}><style><![CDATA[{sheet}]]></style><rect class=\"a\" width=\"1\"/></svg>");
+
+        result.ShouldNotContain(forbidden, Case.Insensitive);
+        result.ShouldContain("<rect width=\"1\"");
+    }
+
     [TestCase("<script>alert(1)</script>", "script")]
     [TestCase("<script xmlns=\"http://www.w3.org/2000/svg\">alert(1)</script>", "alert")]
     [TestCase("<foreignObject><div xmlns=\"http://www.w3.org/1999/xhtml\">x</div></foreignObject>", "foreignObject")]
