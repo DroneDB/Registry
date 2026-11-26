@@ -24,14 +24,24 @@ public sealed class OrganizationLogoLinks
     /// version is part of it so that a browser keeps the image for as long as it is the same one (and asks again as soon
     /// as it is replaced).
     /// </summary>
-    public string? UrlOf(string orgSlug)
+    public string? UrlOf(string orgSlug) => Versioned(orgSlug, $"/{RoutesHelper.OrganizationsRadix}/{orgSlug}/logo");
+
+    /// <summary>
+    /// The URL of the logo of the organization for a reader of one of its datasets,
+    /// <c>/orgs/{slug}/ds/{dsSlug}/organization-logo?v={version}</c> (who may not read the organization itself), or null
+    /// when it has none.
+    /// </summary>
+    public string? DatasetUrlOf(string orgSlug, string dsSlug) => Versioned(orgSlug,
+        $"/{RoutesHelper.OrganizationsRadix}/{orgSlug}/{RoutesHelper.DatasetRadix}/{dsSlug}/organization-logo");
+
+    private string? Versioned(string orgSlug, string path)
     {
         // An organization stored with a slug the rules refuse (not repaired yet) has no folder of the store
         if (!SlugRules.IsValid(orgSlug))
             return null;
 
         return _assets.InfoOf(orgSlug, OrganizationAssetStore.LogoFileName) is { } info
-            ? $"/{RoutesHelper.OrganizationsRadix}/{orgSlug}/logo?v={VersionOf(info)}"
+            ? $"{path}?v={VersionOf(info)}"
             : null;
     }
 

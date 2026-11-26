@@ -673,6 +673,38 @@ public sealed class ReportSettingsHttpTests : IDisposable
         (await SendAsync(HttpMethod.Get, Logo(org, "standard"), null)).Status.ShouldBe(401);
     }
 
+    [Test]
+    public async Task TheLogoOfTheOrganization_IsNamedByTheSettings_AndServedToTheReadersOfADataset()
+    {
+        var org = await NewOrganizationAsync();
+        var dataset = DatasetSettings(org, PublicDs);
+        (await GetSettings(org)).Json["organizationLogoUrl"].ShouldBeNull();
+        (await SendAsync(HttpMethod.Get, dataset, null)).Json["organizationLogoUrl"].ShouldBeNull();
+        (await SendAsync(HttpMethod.Get, $"/orgs/{org}/ds/{PublicDs}/organization-logo", null)).Status.ShouldBe(404);
+
+        var form = new MultipartFormDataContent();
+        form.Add(new ByteArrayContent(Png), "file", "logo.png");
+        var orgLogo = (await SendAsync(HttpMethod.Put, $"/orgs/{org}/logo", Owner, form)).Json["logoUrl"]!.GetValue<string>();
+
+        // A member reads it where the organization is read; a reader of a dataset, through the dataset
+        (await GetSettings(org)).Json["organizationLogoUrl"]!.GetValue<string>().ShouldBe(orgLogo);
+        var forDataset = (await SendAsync(HttpMethod.Get, dataset, null)).Json["organizationLogoUrl"]!.GetValue<string>();
+        forDataset.ShouldBe($"/orgs/{org}/ds/{PublicDs}/organization-logo?v={orgLogo.Split("?v=")[1]}");
+
+        // The organization is private: an anonymous reader of its public dataset gets the logo there, not where the organization is
+        var anonymous = await SendAsync(HttpMethod.Get, forDataset, null);
+        anonymous.Status.ShouldBe(200);
+        anonymous.Bytes.ShouldBe(Png);
+        anonymous.Header("Content-Security-Policy").ShouldBe("sandbox");
+        anonymous.Header("Cache-Control").ShouldNotBeNull().ShouldContain("immutable");
+        (await SendAsync(HttpMethod.Get, orgLogo, null)).Status.ShouldBe(401);
+
+        // A private dataset is not a way to it
+        (await SendAsync(HttpMethod.Get, $"/orgs/{org}/ds/{PrivateDs}/organization-logo", null)).Status.ShouldBe(401);
+        (await SendAsync(HttpMethod.Get, $"/orgs/{org}/ds/{PrivateDs}/organization-logo", Outsider)).Status.ShouldBe(403);
+        (await SendAsync(HttpMethod.Get, $"/orgs/{org}/ds/{PrivateDs}/organization-logo", Member)).Status.ShouldBe(200);
+    }
+
     [TestCase(null)]
     [TestCase("png")]
     [TestCase("jpg")]

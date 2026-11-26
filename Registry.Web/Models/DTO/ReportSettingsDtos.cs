@@ -89,6 +89,12 @@ public class ReportSettingsDto
     public List<ReportTemplateDto> Templates { get; set; } = [];
 
     public ReportSchemaDto Schema { get; set; } = new();
+
+    /// <summary>
+    /// Where the logo of the organization is, for whoever got these settings (a reader of the dataset, a member of the
+    /// organization), or null when it has none: a template without a logo of its own shows it.
+    /// </summary>
+    public string? OrganizationLogoUrl { get; set; }
 }
 
 /// <summary>The settings of an organization, with the version that a write must name.</summary>

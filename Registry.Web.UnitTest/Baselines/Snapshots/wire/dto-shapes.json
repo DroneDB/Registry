@@ -3543,12 +3543,14 @@
             "closed": true
           }
         ]
-      }
+      },
+      "organizationLogoUrl": "OrganizationLogoUrl-text"
     },
     "sparse": {
       "version": 0,
       "templates": null,
-      "schema": null
+      "schema": null,
+      "organizationLogoUrl": null
     }
   },
   "Registry.Web.Models.DTO.OrganizationRequestDto": {
@@ -3951,11 +3953,13 @@
             "closed": true
           }
         ]
-      }
+      },
+      "organizationLogoUrl": "OrganizationLogoUrl-text"
     },
     "sparse": {
       "templates": null,
-      "schema": null
+      "schema": null,
+      "organizationLogoUrl": null
     }
   },
   "Registry.Web.Models.DTO.ReportSettingsUpdateDto": {

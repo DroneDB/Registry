@@ -471,6 +471,12 @@ GET /orgs/{orgSlug}/ds/{dsSlug}/ogcapi/conformance
   403 application/xml string; text/xml string
   404 application/xml string; text/xml string
   503 application/xml string; text/xml string
+GET /orgs/{orgSlug}/ds/{dsSlug}/organization-logo
+  200
+  304
+  401 application/problem+json ProblemDetails
+  403 application/problem+json ProblemDetails
+  404 application/problem+json ProblemDetails
 POST /orgs/{orgSlug}/ds/{dsSlug}/push/commit
   body multipart/form-data object
   200
@@ -1362,7 +1368,7 @@ schema OrganizationLogoDto { logoUrl:string }
 schema OrganizationMemberDto { userName:string, email:string, permissions:OrganizationPermissions, grantedAt:string(date-time), grantedBy:string }
 schema OrganizationPermissions {  }
 schema OrganizationPermissionsDto { canRead:boolean, canWrite:boolean, canDelete:boolean, canManageMembers:boolean }
-schema OrganizationReportSettingsDto { templates:array<ReportTemplateDto>, schema:ReportSchemaDto, version:integer(int32) }
+schema OrganizationReportSettingsDto { templates:array<ReportTemplateDto>, schema:ReportSchemaDto, organizationLogoUrl:string, version:integer(int32) }
 schema PasswordPolicyDto { minLength:integer(int32), requireDigit:boolean, requireUppercase:boolean, requireLowercase:boolean, requireNonAlphanumeric:boolean }
 schema PendingBuildInfoDto { path:string, hash:string, missingDependencies:array<string>, lastAttempt:string(date-time), awaitingFiles:boolean, artifacts:array<ArtifactLinkDto> }
 schema ProblemDetails { type:string, title:string, status:integer(int32), detail:string, instance:string }
@@ -1379,7 +1385,7 @@ schema ReportLogoDto { logo:string, version:integer(int32) }
 schema ReportSchemaChoiceDto { id:string, name:string, colour:string }
 schema ReportSchemaDto { categories:array<ReportSchemaChoiceDto>, severities:array<ReportSchemaChoiceDto>, statuses:array<ReportSchemaStatusDto> }
 schema ReportSchemaStatusDto { id:string, name:string, closed:boolean }
-schema ReportSettingsDto { templates:array<ReportTemplateDto>, schema:ReportSchemaDto }
+schema ReportSettingsDto { templates:array<ReportTemplateDto>, schema:ReportSchemaDto, organizationLogoUrl:string }
 schema ReportSettingsUpdateDto { templates:array<ReportTemplateDto>, schema:ReportSchemaDto, version:integer(int32) }
 schema ReportSettingsVersionDto { version:integer(int32) }
 schema ReportTemplateDto { id:string, name:string, logo:string, primary:string, accent:string, paper:string, orientation:string, headerText:string, footerText:string, disclaimer:string, defaultSections:array<string> }

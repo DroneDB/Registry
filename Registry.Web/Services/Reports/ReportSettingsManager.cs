@@ -36,11 +36,12 @@ public sealed class ReportSettingsManager
     private readonly IAuthManager _authManager;
     private readonly OrganizationRights _rights;
     private readonly ReportLogoStore _logos;
+    private readonly OrganizationLogoLinks _organizationLogos;
     private readonly ILogger<ReportSettingsManager> _logger;
 
     public ReportSettingsManager(RegistryContext context, IDatasetResolver datasets, IDatasetAccessResolver access,
         IAuthManager authManager, OrganizationRights rights, ReportLogoStore logos,
-        ILogger<ReportSettingsManager> logger)
+        OrganizationLogoLinks organizationLogos, ILogger<ReportSettingsManager> logger)
     {
         _context = context;
         _datasets = datasets;
@@ -48,6 +49,7 @@ public sealed class ReportSettingsManager
         _authManager = authManager;
         _rights = rights;
         _logos = logos;
+        _organizationLogos = organizationLogos;
         _logger = logger;
     }
 
@@ -64,7 +66,11 @@ public sealed class ReportSettingsManager
     {
         await _access.ResolveAsync(orgSlug, dsSlug, AccessType.Read, ct: ct);
         var current = await LoadAsync(orgSlug, tracking: false, ct);
-        return new ReportSettingsDto { Templates = current.Templates, Schema = current.Schema };
+        return new ReportSettingsDto
+        {
+            Templates = current.Templates, Schema = current.Schema,
+            OrganizationLogoUrl = _organizationLogos.DatasetUrlOf(orgSlug, dsSlug)
+        };
     }
 
     /// <summary>The templates, the schema and the version, for the members of the organization.</summary>
@@ -72,7 +78,7 @@ public sealed class ReportSettingsManager
     {
         await RequireMemberAsync(orgSlug, ct);
         var current = await LoadAsync(orgSlug, tracking: false, ct);
-        return Describe(current);
+        return Describe(orgSlug, current);
     }
 
     /// <summary>The logo of a template, for a reader of the dataset.</summary>
@@ -127,7 +133,7 @@ public sealed class ReportSettingsManager
         foreach (var orphan in orphans)
             _logos.Delete(orgSlug, orphan);
 
-        return Describe(saved);
+        return Describe(orgSlug, saved);
     }
 
     /// <summary>
@@ -291,8 +297,12 @@ public sealed class ReportSettingsManager
         return new Current(row, templates, schema);
     }
 
-    private static OrganizationReportSettingsDto Describe(Current current) =>
-        new() { Templates = current.Templates, Schema = current.Schema, Version = current.Version };
+    private OrganizationReportSettingsDto Describe(string orgSlug, Current current) =>
+        new()
+        {
+            Templates = current.Templates, Schema = current.Schema, Version = current.Version,
+            OrganizationLogoUrl = _organizationLogos.UrlOf(orgSlug)
+        };
 
     #endregion
 }

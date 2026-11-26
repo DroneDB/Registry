@@ -46,10 +46,30 @@ public class OrganizationLogosController : ControllerBaseEx
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status403Forbidden)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> Get([FromRoute, Required] string orgSlug, [FromQuery] string? v = null,
-        CancellationToken ct = default)
-    {
-        var logo = await _logos.OpenAsync(orgSlug, ct);
+        CancellationToken ct = default) =>
+        Serve(await _logos.OpenAsync(orgSlug, ct), v);
 
+    /// <summary>The logo of the organization, for a reader of one of its datasets.</summary>
+    /// <remarks>A reader of a public dataset of a private organization may not read the organization itself.</remarks>
+    /// <param name="orgSlug">The organization slug.</param>
+    /// <param name="dsSlug">The dataset slug.</param>
+    /// <param name="v">The version the URL of the logo names (<c>organizationLogoUrl</c> of the report settings of the dataset).</param>
+    /// <response code="200">The image, with the type found from its content.</response>
+    /// <response code="304">The client has this image.</response>
+    /// <response code="403">The current user may not read the dataset.</response>
+    /// <response code="404">There is no such dataset, or the organization has no logo.</response>
+    [HttpGet("/" + RoutesHelper.DatasetPrefix + "/organization-logo", Name = nameof(OrganizationLogosController) + "." + nameof(GetForDataset))]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status304NotModified)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> GetForDataset([FromRoute, Required] string orgSlug, [FromRoute, Required] string dsSlug,
+        [FromQuery] string? v = null, CancellationToken ct = default) =>
+        Serve(await _logos.OpenForDatasetAsync(orgSlug, dsSlug, ct), v);
+
+    private PhysicalFileResult Serve(OrganizationLogoFile logo, string? v)
+    {
         // The image with the type its content has (never one the client or a name says), as an inline image that
         // sandboxes whatever a browser would still run from it. Not for shared caches: the logo of a private
         // organization is not for every reader. A URL with the current version names these bytes for good; any other

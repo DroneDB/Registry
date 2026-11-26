@@ -82,6 +82,7 @@ GET /orgs/{orgSlug}/ds/{dsSlug}/ogcapi/collections/{collectionId}/items/{feature
 GET /orgs/{orgSlug}/ds/{dsSlug}/ogcapi/collections/{collectionId}/tiles -> Filter(BasicAuthFilter) + Filter(OgcAuthorizationFilter) [open] @ OgcApiController.TileSets
 GET /orgs/{orgSlug}/ds/{dsSlug}/ogcapi/collections/{collectionId}/tiles/{tileMatrixSet}/{z:int}/{y:int}/{x:int} -> Filter(BasicAuthFilter) + Filter(OgcAuthorizationFilter) [open] @ OgcApiController.Tile
 GET /orgs/{orgSlug}/ds/{dsSlug}/ogcapi/conformance -> Filter(BasicAuthFilter) + Filter(OgcAuthorizationFilter) [open] @ OgcApiController.Conformance
+GET /orgs/{orgSlug}/ds/{dsSlug}/organization-logo -> none [open] @ OrganizationLogosController.GetForDataset
 POST /orgs/{orgSlug}/ds/{dsSlug}/push/commit -> none [open] @ PushController.Commit
 POST /orgs/{orgSlug}/ds/{dsSlug}/push/init -> none [open] @ PushController.Init
 POST /orgs/{orgSlug}/ds/{dsSlug}/push/meta -> none [open] @ PushController.Meta

@@ -79,7 +79,23 @@ public sealed class OrganizationLogos
     public async Task<OrganizationLogoFile> OpenAsync(string orgSlug, CancellationToken ct = default)
     {
         await _access.ResolveOrganizationAsync(orgSlug, AccessType.Read, ct: ct);
+        return Find(orgSlug);
+    }
 
+    /// <summary>
+    /// The logo, for a reader of one of the datasets of the organization: a public dataset of a private organization
+    /// shows the logo of its organization (on a report, for one) to readers that may not read the organization.
+    /// </summary>
+    /// <exception cref="NotFoundException">There is no such dataset, or the organization has no logo.</exception>
+    /// <exception cref="ForbiddenException">The current user may not read the dataset.</exception>
+    public async Task<OrganizationLogoFile> OpenForDatasetAsync(string orgSlug, string dsSlug, CancellationToken ct = default)
+    {
+        await _access.ResolveAsync(orgSlug, dsSlug, AccessType.Read, ct: ct);
+        return Find(orgSlug);
+    }
+
+    private OrganizationLogoFile Find(string orgSlug)
+    {
         const string noLogo = "The organization has no logo";
         var info = _assets.InfoOf(orgSlug, OrganizationAssetStore.LogoFileName)
                    ?? throw new NotFoundException(noLogo);
