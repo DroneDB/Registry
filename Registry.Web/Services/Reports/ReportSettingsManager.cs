@@ -31,7 +31,6 @@ public sealed record ReportLogoFile(string Path, string MediaType);
 public sealed class ReportSettingsManager
 {
     private readonly RegistryContext _context;
-    private readonly IDatasetResolver _datasets;
     private readonly IDatasetAccessResolver _access;
     private readonly IAuthManager _authManager;
     private readonly OrganizationRights _rights;
@@ -39,12 +38,11 @@ public sealed class ReportSettingsManager
     private readonly OrganizationLogoLinks _organizationLogos;
     private readonly ILogger<ReportSettingsManager> _logger;
 
-    public ReportSettingsManager(RegistryContext context, IDatasetResolver datasets, IDatasetAccessResolver access,
+    public ReportSettingsManager(RegistryContext context, IDatasetAccessResolver access,
         IAuthManager authManager, OrganizationRights rights, ReportLogoStore logos,
         OrganizationLogoLinks organizationLogos, ILogger<ReportSettingsManager> logger)
     {
         _context = context;
-        _datasets = datasets;
         _access = access;
         _authManager = authManager;
         _rights = rights;
@@ -76,7 +74,7 @@ public sealed class ReportSettingsManager
     /// <summary>The templates, the schema and the version, for the members of the organization.</summary>
     public async Task<OrganizationReportSettingsDto> GetForOrganization(string orgSlug, CancellationToken ct = default)
     {
-        await RequireMemberAsync(orgSlug, ct);
+        await _rights.RequireMemberAsync(orgSlug, ct);
         var current = await LoadAsync(orgSlug, tracking: false, ct);
         return Describe(orgSlug, current);
     }
@@ -95,7 +93,7 @@ public sealed class ReportSettingsManager
     public async Task<ReportLogoFile> GetLogoForOrganization(string orgSlug, string templateId,
         CancellationToken ct = default)
     {
-        await RequireMemberAsync(orgSlug, ct);
+        await _rights.RequireMemberAsync(orgSlug, ct);
         return LogoOf(orgSlug, await LoadAsync(orgSlug, tracking: false, ct), templateId);
     }
 
@@ -113,7 +111,7 @@ public sealed class ReportSettingsManager
     public async Task<OrganizationReportSettingsDto> Update(string orgSlug, ReportSettingsUpdateDto? update,
         CancellationToken ct = default)
     {
-        await RequireAdministratorAsync(orgSlug, ct);
+        await _rights.RequireAdministratorAsync(orgSlug, ct);
 
         var (templates, schema) = ReportSettingsValidator.Validate(update);
         var version = update!.Version ?? throw ReportSettingsValidator.Refuse("version", "version is required");
@@ -144,7 +142,7 @@ public sealed class ReportSettingsManager
     public async Task<ReportLogoDto> SetLogo(string orgSlug, string templateId, byte[] content,
         CancellationToken ct = default)
     {
-        await RequireAdministratorAsync(orgSlug, ct);
+        await _rights.RequireAdministratorAsync(orgSlug, ct);
 
         var current = await LoadAsync(orgSlug, tracking: true, ct);
         var template = StoredTemplate(current, templateId);
@@ -179,7 +177,7 @@ public sealed class ReportSettingsManager
     public async Task<ReportSettingsVersionDto> RemoveLogo(string orgSlug, string templateId,
         CancellationToken ct = default)
     {
-        await RequireAdministratorAsync(orgSlug, ct);
+        await _rights.RequireAdministratorAsync(orgSlug, ct);
 
         var current = await LoadAsync(orgSlug, tracking: true, ct);
         var template = StoredTemplate(current, templateId);
@@ -198,20 +196,6 @@ public sealed class ReportSettingsManager
     #endregion
 
     #region Rules
-
-    private async Task RequireMemberAsync(string orgSlug, CancellationToken ct)
-    {
-        var org = await _datasets.GetRequiredOrganizationAsync(orgSlug, ct: ct);
-        if (!await _rights.IsMemberAsync(org, await _authManager.GetCurrentUserId(), ct))
-            throw new ForbiddenException(AccessDeniedMessages.OrganizationMemberRequired);
-    }
-
-    private async Task RequireAdministratorAsync(string orgSlug, CancellationToken ct)
-    {
-        var org = await _datasets.GetRequiredOrganizationAsync(orgSlug, ct: ct);
-        if (!await _rights.CanManageAsync(org, await _authManager.GetCurrentUserId(), ct))
-            throw new ForbiddenException(AccessDeniedMessages.OrganizationAdminRequired);
-    }
 
     private static void RequireVersion(Current current, int version)
     {

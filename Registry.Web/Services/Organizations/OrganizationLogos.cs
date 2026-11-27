@@ -29,19 +29,15 @@ public sealed class OrganizationLogos
 
     private readonly OrganizationAssetStore _assets;
     private readonly OrganizationLogoLinks _links;
-    private readonly IAuthManager _authManager;
     private readonly IDatasetAccessResolver _access;
-    private readonly IDatasetResolver _datasets;
     private readonly OrganizationRights _rights;
 
-    public OrganizationLogos(OrganizationAssetStore assets, OrganizationLogoLinks links, IAuthManager authManager, IDatasetAccessResolver access,
-        IDatasetResolver datasets, OrganizationRights rights)
+    public OrganizationLogos(OrganizationAssetStore assets, OrganizationLogoLinks links, IDatasetAccessResolver access,
+        OrganizationRights rights)
     {
         _assets = assets;
         _links = links;
-        _authManager = authManager;
         _access = access;
-        _datasets = datasets;
         _rights = rights;
     }
 
@@ -55,7 +51,7 @@ public sealed class OrganizationLogos
     /// <exception cref="BadRequestException">Empty, over <see cref="MaxBytes"/>, or not a PNG, JPEG, WebP or SVG.</exception>
     public async Task<string?> SetAsync(string orgSlug, byte[] content, CancellationToken ct = default)
     {
-        await RequireAdministratorAsync(orgSlug, ct);
+        await _rights.RequireAdministratorAsync(orgSlug, ct);
 
         var image = OrganizationImage.Inspect(content, MaxBytes);
         _assets.Save(orgSlug, OrganizationAssetStore.LogoFileName, image.Content, replace: true);
@@ -68,7 +64,7 @@ public sealed class OrganizationLogos
     /// <exception cref="NotFoundException">There is no such organization.</exception>
     public async Task RemoveAsync(string orgSlug, CancellationToken ct = default)
     {
-        await RequireAdministratorAsync(orgSlug, ct);
+        await _rights.RequireAdministratorAsync(orgSlug, ct);
 
         _assets.Remove(orgSlug, OrganizationAssetStore.LogoFileName);
     }
@@ -106,12 +102,5 @@ public sealed class OrganizationLogos
                    ?? throw new NotFoundException(noLogo);
 
         return new OrganizationLogoFile(info.FullName, OrganizationImage.MediaTypeOfContent(head), info);
-    }
-
-    private async Task RequireAdministratorAsync(string orgSlug, CancellationToken ct)
-    {
-        var org = await _datasets.GetRequiredOrganizationAsync(orgSlug, ct: ct);
-        if (!await _rights.CanManageAsync(org, await _authManager.GetCurrentUserId(), ct))
-            throw new ForbiddenException(AccessDeniedMessages.OrganizationAdminRequired);
     }
 }

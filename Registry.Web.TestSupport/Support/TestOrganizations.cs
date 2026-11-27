@@ -34,6 +34,6 @@ public static class TestOrganizations
             new OrganizationMerger(authManager, memberships, context, datasets, datasetsManager,
                 assets, NullLogger<OrganizationMerger>.Instance),
             new OrganizationMembers(authManager, memberships, context, appContext, accounts,
-                new OrganizationRights(authManager, context)));
+                new OrganizationRights(authManager, context, datasets)));
     }
 }

@@ -4,8 +4,10 @@ using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
 using Registry.Web.Data;
 using Registry.Web.Data.Models;
+using Registry.Web.Exceptions;
 using Registry.Web.Models;
 using Registry.Web.Services.Ports;
+using Registry.Web.Utilities.Auth;
 
 namespace Registry.Web.Services.Organizations;
 
@@ -18,11 +20,37 @@ public sealed class OrganizationRights
 {
     private readonly IAuthManager _authManager;
     private readonly RegistryContext _context;
+    private readonly IDatasetResolver _datasets;
 
-    public OrganizationRights(IAuthManager authManager, RegistryContext context)
+    public OrganizationRights(IAuthManager authManager, RegistryContext context, IDatasetResolver datasets)
     {
         _authManager = authManager;
         _context = context;
+        _datasets = datasets;
+    }
+
+    /// <summary>
+    /// Throws unless the current user is a member of the organization <paramref name="orgSlug"/>
+    /// (<see cref="IsMemberAsync"/>): <c>NotFoundException</c> for an unknown organization, <c>ForbiddenException</c>
+    /// for a user who is not a member.
+    /// </summary>
+    public async Task RequireMemberAsync(string orgSlug, CancellationToken ct = default)
+    {
+        var org = await _datasets.GetRequiredOrganizationAsync(orgSlug, ct: ct);
+        if (!await IsMemberAsync(org, await _authManager.GetCurrentUserId(), ct))
+            throw new ForbiddenException(AccessDeniedMessages.OrganizationMemberRequired);
+    }
+
+    /// <summary>
+    /// Throws unless the current user is an administrator of the organization <paramref name="orgSlug"/>
+    /// (<see cref="CanManageAsync"/>): <c>NotFoundException</c> for an unknown organization, <c>ForbiddenException</c>
+    /// for a user who may not manage it.
+    /// </summary>
+    public async Task RequireAdministratorAsync(string orgSlug, CancellationToken ct = default)
+    {
+        var org = await _datasets.GetRequiredOrganizationAsync(orgSlug, ct: ct);
+        if (!await CanManageAsync(org, await _authManager.GetCurrentUserId(), ct))
+            throw new ForbiddenException(AccessDeniedMessages.OrganizationAdminRequired);
     }
 
     /// <summary>
