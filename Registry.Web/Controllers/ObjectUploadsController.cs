@@ -70,7 +70,9 @@ public class ObjectUploadsController : ControllerBaseEx
     /// A file whose name exists in its folder (without regard to letter case) is refused with <c>409</c>, the
     /// "already exists" message and <c>conflictPath</c>, unless the form field <c>overwrite=true</c> comes
     /// before its file part; then it replaces that entry, in the entry's letter case. The name is checked before
-    /// the first byte is stored and again at the commit.
+    /// the first byte is stored and again at the commit. For one release a request with exactly one file part and no
+    /// <c>overwrite</c> field at all (a client from before the field) replaces, as it did then; this is not so for a
+    /// bundle, a chunk, a commit or a share upload.
     /// One file part: <c>201</c> with the entry. Several file parts (a bundle): <c>200</c> with one
     /// result per file; a file that fails does not fail the others. With an <c>X-Upload-Id</c>
     /// header the outcome can be asked for later (<c>GET obj/uploads/{uploadId}</c>), and a request
@@ -114,6 +116,7 @@ public class ObjectUploadsController : ControllerBaseEx
                 {
                     // The overwrite field sent before this file part, after the previous one, is the part's (D-040)
                     var overwrite = ChunkFields.Overwrite(part.Overwrite);
+                    NameClashException? deferredClash = null;
                     if (part.Path != null)
                     {
                         // Refuse a destination before its first byte is written
@@ -124,13 +127,22 @@ public class ObjectUploadsController : ControllerBaseEx
                         }
                         catch (NameClashException clash)
                         {
-                            // Nothing of it is stored: its bytes are read past, so the other files of a bundle go on
-                            await part.Body.CopyToAsync(Stream.Null, ct);
-                            return new ReceivedPart(null, overwrite, clash);
+                            // A request that has sent no overwrite field yet may be a legacy single-file save, which
+                            // replaces: whether it is one is known when the form is read, so the file is stored and
+                            // the clash is decided then. Otherwise nothing of it is stored: its bytes are read past,
+                            // so the other files of a bundle go on
+                            if (part.Fields.ContainsKey(OverwriteField))
+                            {
+                                await part.Body.CopyToAsync(Stream.Null, ct);
+                                return new ReceivedPart(null, overwrite, clash);
+                            }
+
+                            deferredClash = clash;
                         }
                     }
 
-                    return new ReceivedPart(await _uploads.StreamAsync(ctx, part.Body, ct), overwrite, null);
+                    return new ReceivedPart(await _uploads.StreamAsync(ctx, part.Body, ct), overwrite, null,
+                        deferredClash);
                 }, received =>
                 {
                     if (received.File != null) _uploads.Discard(received.File);
@@ -151,6 +163,12 @@ public class ObjectUploadsController : ControllerBaseEx
             return Created(orgSlug, dsSlug, folder);
         }
 
+        // A single file and no overwrite field at all: the save of a client from before the field existed, which
+        // replaced the file (kept for one release). Never a bundle, a chunk, a commit or a share upload
+        var legacyReplace = form.Files.Count == 1 && !form.Fields.ContainsKey(OverwriteField);
+        if (!legacyReplace)
+            RefuseDeferredClashes(form);
+
         if (form.Files.Count == 1)
         {
             var (path, received) = form.Files[0];
@@ -161,7 +179,7 @@ public class ObjectUploadsController : ControllerBaseEx
             }
 
             var entry = await _uploads.CommitAsync(ctx, path ?? form.GetField("path") ?? string.Empty, received.File!,
-                received.Overwrite);
+                received.Overwrite || legacyReplace);
             return Created(orgSlug, dsSlug, entry);
         }
 
@@ -174,8 +192,33 @@ public class ObjectUploadsController : ControllerBaseEx
     private static readonly StreamedFile NotStored =
         new(string.Empty, 0, new FileHashHint(string.Empty, 0, DateTime.MinValue));
 
-    /// <summary>A file part of an upload request: its temp file, or why it was refused before its first byte.</summary>
-    private sealed record ReceivedPart(StreamedFile? File, bool Overwrite, Exception? Refusal);
+    // The form field that says a file may replace the one that holds its name
+    private const string OverwriteField = "overwrite";
+
+    /// <summary>
+    /// A file part of an upload request: its temp file, or why it was refused before its first byte.
+    /// <paramref name="DeferredClash"/> is the name clash of a part that was stored anyway because the request
+    /// might still turn out to be a legacy single-file save (see <see cref="RefuseDeferredClashes"/>).
+    /// </summary>
+    private sealed record ReceivedPart(StreamedFile? File, bool Overwrite, Exception? Refusal,
+        NameClashException? DeferredClash = null);
+
+    /// <summary>
+    /// Turns the stored files whose name clashes into the refusal they would have got before their first byte, and
+    /// deletes them: the request is not a legacy single-file save, so the clash stands.
+    /// </summary>
+    private void RefuseDeferredClashes(StreamedMultipartFiles<ReceivedPart> form)
+    {
+        for (var i = 0; i < form.Files.Count; i++)
+        {
+            var (path, received) = form.Files[i];
+            if (received.DeferredClash is not { } clash)
+                continue;
+
+            if (received.File != null) _uploads.Discard(received.File);
+            form.Files[i] = (path, received with { File = null, Refusal = clash, DeferredClash = null });
+        }
+    }
 
     /// <summary>
     /// The state of an upload by the <c>X-Upload-Id</c> it was sent with. A client whose request

@@ -26,6 +26,10 @@ public sealed class EntryTransferService : IEntryTransferService
     private readonly EntryChangeNotifier _changes;
     private readonly ILogger<EntryTransferService> _logger;
 
+    // One per process, not per request (the service is scoped): the transfers of a dataset wait for each other
+    private static readonly KeyedAsyncLock DatasetLocks = new();
+    private readonly KeyedAsyncLock _datasetLocks = DatasetLocks;
+
     public EntryTransferService(IDatasetAccessResolver access, DatasetPathPolicy paths, IFileSystem fs,
         EntryWritePolicy writePolicy, IBuildArtifactResolver artifacts, EntryChangeNotifier changes,
         ILogger<EntryTransferService> logger)
@@ -58,6 +62,11 @@ public sealed class EntryTransferService : IEntryTransferService
         var destAccess = await _access.ResolveAsync(destOrgSlug, destDsSlug, AccessType.Write, ct: ct);
         var destDdb = destAccess.Ddb;
 
+        // One transfer at a time in the datasets it reads and writes: two requests for the same entry never both
+        // pass the checks below. Everything that depends on the state of the datasets is read under the lock.
+        using var lease = await _datasetLocks.AcquireAsync(
+            [LockKey(sourceOrgSlug, sourceDsSlug), LockKey(destOrgSlug, destDsSlug)], ct);
+
         var sourceEntry = sourceDdb.GetEntry(sourcePath)
                           ?? throw new NotFoundException("Cannot find source entry: '" + sourcePath + "'");
         var isFolder = sourceEntry.Type == EntryType.Directory;
@@ -77,7 +86,8 @@ public sealed class EntryTransferService : IEntryTransferService
 
         await _writePolicy.EnsureAllowedAsync(destAccess.Dataset.Organization?.OwnerId, destPath, isFolder, await GetEntrySizeAsync(sourceDdb, sourceEntry));
 
-        if (destDdb.GetEntry(destPath) is { } destEntry)
+        var destEntry = destDdb.GetEntry(destPath);
+        if (destEntry != null)
         {
             if (!overwrite)
                 throw new ConflictException("Destination entry already exists and overwrite is false");
@@ -88,22 +98,17 @@ public sealed class EntryTransferService : IEntryTransferService
         if (sourceEntry.Type == EntryType.DroneDB)
             throw new BadRequestException("Cannot transfer a DroneDB file");
 
-        // Track progress for rollback
-        var destLocalPath = destDdb.GetLocalPath(destPath);
-        var fileSystemCopied = false;
-        var addedToDdb = false;
+        var placement = new EntryPlacement(_fs, _logger);
 
         try
         {
             _logger.LogInformation("Transferring {Kind} '{Source}' to '{Dest}'", isFolder ? "directory" : "file",
                 sourcePath, destPath);
-            _fs.EnsureParentFolderExists(destLocalPath);
-            _fs.CopyEntry(sourceDdb.GetLocalPath(sourcePath), destLocalPath, isFolder);
-            fileSystemCopied = true;
+            placement.Place(destDdb, destPath, destEntry, sourceDdb.GetLocalPath(sourcePath), isFolder);
 
             // The copy is indexed with the source hashes, not hashed again
             CopiedEntries.Index(sourceDdb, sourceEntry, destDdb, destPath, _fs);
-            addedToDdb = true;
+            placement.MarkIndexed();
 
             if (!destDdb.EntryExists(destPath))
                 throw new DdbException($"Cannot find destination '{destPath}' after transfer, something wrong with ddb");
@@ -119,28 +124,28 @@ public sealed class EntryTransferService : IEntryTransferService
             if (!keepSource)
             {
                 _logger.LogInformation("Removing source '{SourcePath}'", sourcePath);
-                sourceDdb.Remove(sourcePath);
+                RemoveSource(sourceDdb, sourcePath);
                 _fs.RemoveEntry(sourceDdb.GetLocalPath(sourcePath), isFolder);
-                await _changes.EntriesLeftAsync(sourceOrgSlug, sourceDsSlug, [sourcePath]);
             }
 
-            // The transferred files may be what pending builds of the destination waited for
-            await _changes.EntriesArrivedAsync(destAccess, destOrgSlug, destDsSlug, [destPath]);
-
-            _logger.LogInformation("Transfer OK");
+            // The destination holds the entry and the source does not: the replaced entry is not needed any more
+            placement.Commit();
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Transfer failed, attempting rollback");
-
-            // Rollback in reverse order
-            if (addedToDdb)
-                Undo("DDB add", () => destDdb.Remove(destPath));
-            if (fileSystemCopied)
-                Undo("file system copy", () => _fs.RemoveEntry(destLocalPath, isFolder));
-
+            placement.Rollback();
             throw;
         }
+
+        // After the commit: what the datasets tell their watchers is not a reason to undo the transfer
+        if (!keepSource)
+            await _changes.EntriesLeftAsync(sourceOrgSlug, sourceDsSlug, [sourcePath]);
+
+        // The transferred files may be what pending builds of the destination waited for
+        await _changes.EntriesArrivedAsync(destAccess, destOrgSlug, destDsSlug, [destPath]);
+
+        _logger.LogInformation("Transfer OK");
     }
 
     public async Task<EntryDto> CopyAsync(string orgSlug, string dsSlug, string source, string dest,
@@ -168,6 +173,9 @@ public sealed class EntryTransferService : IEntryTransferService
         if ((dest + "/").StartsWith(source + "/", StringComparison.Ordinal))
             throw new BadRequestException("Cannot copy a path onto itself or one of its descendants");
 
+        // The checks below read the state of the dataset: one copy or transfer at a time in it
+        using var lease = await _datasetLocks.AcquireAsync([LockKey(orgSlug, dsSlug)], ct);
+
         var sourceEntry = ddb.GetEntry(source) ?? throw new NotFoundException("Cannot find source entry: '" + source + "'");
 
         if (sourceEntry.Type == EntryType.DroneDB)
@@ -191,66 +199,23 @@ public sealed class EntryTransferService : IEntryTransferService
         var storageDelta = destEntry == null ? entrySize : Math.Max(0L, entrySize - await GetEntrySizeAsync(ddb, destEntry));
         await _writePolicy.EnsureAllowedAsync(access.Dataset.Organization?.OwnerId, dest, isFolder, storageDelta);
 
-        var sourceLocalPath = ddb.GetLocalPath(source);
-        var destLocalPath = ddb.GetLocalPath(dest);
-        var destWasFolder = destEntry?.Type == EntryType.Directory;
-        string? tempCopyPath = null;
-        string? trashPath = null;
-        var copiedToTemp = false;
-        var trashCreated = false;
-        var fileSystemCopied = false;
-        var destDdbAdded = false;
+        var placement = new EntryPlacement(_fs, _logger);
 
         try
         {
-            _fs.EnsureParentFolderExists(destLocalPath);
-
-            if (destEntry != null)
-            {
-                // Atomic overwrite: copy to a temporary sibling (the destination is intact), move the
-                // destination to a trash sibling (kept for a rollback), promote the copy, index it; then the
-                // trash is deleted, or put back when anything failed
-                var token = Guid.NewGuid().ToString("N");
-                tempCopyPath = destLocalPath + ".copying-" + token;
-                trashPath = destLocalPath + ".trash-" + token;
-
-                _logger.LogInformation("Atomic overwrite: copying '{Source}' -> '{Temp}'", source, tempCopyPath);
-                _fs.CopyEntry(sourceLocalPath, tempCopyPath, isFolder);
-                copiedToTemp = true;
-
-                // The destination goes to the trash BEFORE its index entry is removed: when the move fails the
-                // index still matches the disk and the rollback has nothing extra to undo
-                _logger.LogInformation("Atomic overwrite: moving existing dest '{Dest}' -> trash '{Trash}'", dest,
-                    trashPath);
-                if (destWasFolder ? _fs.FolderExists(destLocalPath) : _fs.Exists(destLocalPath))
-                    _fs.MoveEntry(destLocalPath, trashPath, destWasFolder);
-                trashCreated = true;
-
-                ddb.Remove(dest);
-
-                _logger.LogInformation("Atomic overwrite: promoting temp '{Temp}' -> dest '{Dest}'", tempCopyPath, dest);
-                _fs.MoveEntry(tempCopyPath, destLocalPath, isFolder);
-                copiedToTemp = false;
-            }
-            else
-            {
-                _logger.LogInformation("Copying {Kind} '{Source}' to '{Dest}'", isFolder ? "directory" : "file", source,
-                    dest);
-                _fs.CopyEntry(sourceLocalPath, destLocalPath, isFolder);
-            }
-
-            fileSystemCopied = true;
+            _logger.LogInformation("Copying {Kind} '{Source}' to '{Dest}'", isFolder ? "directory" : "file", source,
+                dest);
+            placement.Place(ddb, dest, destEntry, ddb.GetLocalPath(source), isFolder);
 
             // The copy is indexed with the source hashes, not hashed again
             CopiedEntries.Index(ddb, sourceEntry, ddb, dest, _fs);
-            destDdbAdded = true;
+            placement.MarkIndexed();
 
             var copiedEntry = ddb.GetEntry(dest)
                               ?? throw new DdbException($"Cannot find destination '{dest}' after copy, something wrong with ddb");
 
             // Commit: the previous destination is not needed any more (the new one is in place)
-            if (trashCreated)
-                Undo("trash copy", () => _fs.RemoveEntry(trashPath!, destWasFolder), LogLevel.Warning);
+            placement.Commit();
 
             // Builds are named by content hash: the copy's content is the source's, its build serves both
 
@@ -263,23 +228,28 @@ public sealed class EntryTransferService : IEntryTransferService
         catch (Exception ex)
         {
             _logger.LogError(ex, "Copy failed, attempting rollback");
-
-            if (destDdbAdded)
-                Undo("DDB add", () => ddb.Remove(dest));
-
-            // A partially promoted destination goes before the trash is put back
-            if (fileSystemCopied)
-                Undo("file system copy", () => _fs.RemoveEntry(destLocalPath, isFolder));
-
-            // The temporary copy, when it was never promoted
-            if (copiedToTemp)
-                Undo("temp copy", () => _fs.RemoveEntry(tempCopyPath!, isFolder));
-
-            // The original destination, when it was moved aside
-            if (trashCreated && destEntry != null)
-                RestoreFromTrash(ddb, dest, destLocalPath, trashPath!, destWasFolder);
-
+            placement.Rollback();
             throw;
+        }
+    }
+
+    /// <summary>The key of a dataset in the lock of the transfers.</summary>
+    private static string LockKey(string orgSlug, string dsSlug) =>
+        (orgSlug + "/" + dsSlug).ToLowerInvariant();
+
+    /// <summary>
+    /// Forgets the source in its index. A source that is gone (another request moved or deleted it since the
+    /// checks) is a <see cref="NotFoundException"/>: the transfer is undone and answers 404, not a 500.
+    /// </summary>
+    private static void RemoveSource(IDDB ddb, string path)
+    {
+        try
+        {
+            ddb.Remove(path);
+        }
+        catch (DdbException) when (ddb.GetEntry(path) is null)
+        {
+            throw new NotFoundException("Cannot find source entry: '" + path + "'");
         }
     }
 
@@ -324,35 +294,5 @@ public sealed class EntryTransferService : IEntryTransferService
 
         // A file system error is a server fault: it reaches the error handler (logged once, 500)
         return await Task.Run(() => _fs.GetDirectorySize(localPath));
-    }
-
-    private void RestoreFromTrash(IDDB ddb, string dest, string destLocalPath, string trashPath, bool wasFolder)
-    {
-        try
-        {
-            _logger.LogWarning("Restoring original destination '{Dest}' from trash '{Trash}'", dest, trashPath);
-            if (wasFolder ? _fs.FolderExists(trashPath) : _fs.Exists(trashPath))
-                _fs.MoveEntry(trashPath, destLocalPath, wasFolder);
-
-            // Re-index the restored entry so the DDB stays consistent
-            Undo("re-index of the restored destination", () => ddb.AddRaw(dest));
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Failed to restore original destination '{Dest}' from trash '{Trash}'", dest, trashPath);
-        }
-    }
-
-    // A rollback step: logged when it fails, never thrown over the original failure
-    private void Undo(string step, Action undo, LogLevel failureLevel = LogLevel.Error)
-    {
-        try
-        {
-            undo();
-        }
-        catch (Exception ex)
-        {
-            _logger.Log(failureLevel, ex, "Failed to roll back the {Step}", step);
-        }
     }
 }

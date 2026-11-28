@@ -185,6 +185,54 @@ public class DownloadLimitMiddlewareTest : TestBase
         ex.RetryAfterSeconds.ShouldBe(10);
     }
 
+    // The preflight asks whether a slot is free: it is answered here, never by the download behind it (the client
+    // does not read that body, and the Registry would read the whole file for nothing)
+    [Test]
+    public async Task InvokeAsync_Preflight_LimiterDisabled_IsAnsweredWithoutTheDownload()
+    {
+        _limiterMock.Setup(l => l.IsEnabled).Returns(false);
+        var context = CreateContext("/orgs/org1/ds/ds1/download");
+        context.Request.Headers["X-Download-Check"] = "1";
+        var nextCalled = false;
+
+        await _middleware.InvokeAsync(context, _ => { nextCalled = true; return Task.CompletedTask; });
+
+        nextCalled.ShouldBeFalse();
+        context.Response.StatusCode.ShouldBe(200);
+        _limiterMock.Verify(l => l.CanAcquireSlot(It.IsAny<string>()), Times.Never);
+    }
+
+    [Test]
+    public async Task InvokeAsync_Preflight_Admin_IsAnsweredWithoutTheDownload()
+    {
+        _limiterMock.Setup(l => l.IsEnabled).Returns(true);
+        _authManagerMock.Setup(a => a.IsUserAdmin()).ReturnsAsync(true);
+        var context = CreateContext("/orgs/org1/ds/ds1/download", "admin1");
+        context.Request.Headers["X-Download-Check"] = "1";
+        var nextCalled = false;
+
+        await _middleware.InvokeAsync(context, _ => { nextCalled = true; return Task.CompletedTask; });
+
+        nextCalled.ShouldBeFalse();
+        context.Response.StatusCode.ShouldBe(200);
+        _limiterMock.Verify(l => l.CanAcquireSlot(It.IsAny<string>()), Times.Never);
+    }
+
+    [TestCase(false)]
+    [TestCase(true)]
+    public async Task InvokeAsync_Preflight_OnANonDownloadPath_IsPassedThrough(bool limiterEnabled)
+    {
+        _limiterMock.Setup(l => l.IsEnabled).Returns(limiterEnabled);
+        var context = CreateContext("/orgs/org1/ds/ds1/info");
+        context.Request.Headers["X-Download-Check"] = "1";
+        var nextCalled = false;
+
+        await _middleware.InvokeAsync(context, _ => { nextCalled = true; return Task.CompletedTask; });
+
+        nextCalled.ShouldBeTrue();
+        _limiterMock.Verify(l => l.CanAcquireSlot(It.IsAny<string>()), Times.Never);
+    }
+
     #endregion
 
     #region Actual download limiting

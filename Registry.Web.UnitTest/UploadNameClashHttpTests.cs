@@ -120,6 +120,66 @@ public sealed class UploadNameClashHttpTests : IDisposable
         Read("replaced.txt").ShouldBe("new");
     }
 
+    // A client from before the overwrite field (a stale tab, a script) saves over its file: one file part and no
+    // overwrite field at all replaces, for one release
+    [Test]
+    public async Task Upload_OfOneFileWithoutAnOverwriteField_ReplacesTheFile()
+    {
+        Existing("legacy.txt", "old");
+
+        var (status, body) = await SendAsync("/obj", File("legacy.txt", "new", overwrite: null));
+
+        status.ShouldBe(HttpStatusCode.Created);
+        body!["path"]!.GetValue<string>().ShouldBe("legacy.txt");
+        Read("legacy.txt").ShouldBe("new");
+        NoTempFiles();
+    }
+
+    [Test]
+    public async Task Upload_OfOneFileWithoutAnOverwriteField_AndWithNothingToReplace_IsStored()
+    {
+        var (status, _) = await SendAsync("/obj", File("legacy-new.txt", "fresh", overwrite: null));
+
+        status.ShouldBe(HttpStatusCode.Created);
+        Read("legacy-new.txt").ShouldBe("fresh");
+    }
+
+    // The explicit "false" of the current Hub is a request not to replace
+    [Test]
+    public async Task Upload_OfOneFileWithOverwriteFalse_IsRefused()
+    {
+        Existing("legacy-kept.txt", "old");
+
+        var (status, _) = await SendAsync("/obj", File("legacy-kept.txt", "new", overwrite: false));
+
+        status.ShouldBe(HttpStatusCode.Conflict);
+        Read("legacy-kept.txt").ShouldBe("old");
+        NoTempFiles();
+    }
+
+    // Only a single file part is the legacy save: a bundle without the field refuses its clashing part, stores
+    // nothing of it and leaves no temporary file
+    [Test]
+    public async Task Bundle_WithoutAnOverwriteField_StillRefusesTheClashingPart()
+    {
+        Existing("legacy-bundle-a.txt", "old");
+
+        var content = new MultipartFormDataContent();
+        AddPart(content, "legacy-bundle-a.txt", "new", overwrite: null);
+        AddPart(content, "legacy-bundle-b.txt", "fresh", overwrite: null);
+
+        var (status, body) = await SendAsync("/obj", content);
+
+        status.ShouldBe(HttpStatusCode.OK);
+        var results = body!.AsArray();
+        results[0]!["status"]!.GetValue<int>().ShouldBe(409);
+        results[0]!["conflictPath"]!.GetValue<string>().ShouldBe("legacy-bundle-a.txt");
+        results[1]!["status"]!.GetValue<int>().ShouldBe(201);
+        Read("legacy-bundle-a.txt").ShouldBe("old");
+        Read("legacy-bundle-b.txt").ShouldBe("fresh");
+        NoTempFiles();
+    }
+
     [Test]
     public async Task Upload_OfANameThatDiffersOnlyInCase_ClashesAndOverwritesTheExistingCase()
     {
@@ -308,18 +368,19 @@ public sealed class UploadNameClashHttpTests : IDisposable
         return (response.StatusCode, trimmed.StartsWith('{') || trimmed.StartsWith('[') ? JsonNode.Parse(body) : null);
     }
 
-    private static MultipartFormDataContent File(string path, string text, bool overwrite = false)
+    // overwrite: true or false is sent as the field; null sends none (a client from before the field)
+    private static MultipartFormDataContent File(string path, string text, bool? overwrite = false)
     {
         var content = new MultipartFormDataContent();
         AddPart(content, path, text, overwrite);
         return content;
     }
 
-    private static void AddPart(MultipartFormDataContent content, string path, string text, bool overwrite = false)
+    private static void AddPart(MultipartFormDataContent content, string path, string text, bool? overwrite = false)
     {
         content.Add(new StringContent(path), "path");
-        if (overwrite)
-            content.Add(new StringContent("true"), "overwrite");
+        if (overwrite is { } flag)
+            content.Add(new StringContent(flag ? "true" : "false"), "overwrite");
         var file = new ByteArrayContent(Encoding.UTF8.GetBytes(text));
         file.Headers.ContentType = new MediaTypeHeaderValue("application/octet-stream");
         content.Add(file, "file", Path.GetFileName(path));

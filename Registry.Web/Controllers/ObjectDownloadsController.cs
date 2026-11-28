@@ -6,6 +6,7 @@ using System.Threading.Tasks;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Primitives;
 using Registry.Ports.DroneDB;
 using Registry.Web.Models;
 using Registry.Web.Services.Objects;
@@ -90,6 +91,17 @@ public class ObjectDownloadsController : ControllerBaseEx
     }
 
     /// <summary>
+    /// The paths of a selection from the occurrences of its "path" parameter or field. Several occurrences are each
+    /// a literal path; a single one keeps the legacy form, a comma-separated list, so shared links keep working.
+    /// </summary>
+    /// <param name="occurrences">Every occurrence of the parameter, in order.</param>
+    /// <param name="first">The value the model binder gave the parameter (the first occurrence), null when absent.</param>
+    private static string[]? SelectedPaths(StringValues occurrences, string? first) =>
+        occurrences.Count > 1
+            ? occurrences.Where(p => !string.IsNullOrEmpty(p)).Select(p => p!).ToArray()
+            : first?.Split(",", StringSplitOptions.RemoveEmptyEntries);
+
+    /// <summary>
     /// Downloads one or more objects from a dataset.
     /// </summary>
     /// <param name="orgSlug">The organization slug.</param>
@@ -110,16 +122,9 @@ public class ObjectDownloadsController : ControllerBaseEx
         [FromQuery(Name = "inline")] int? isInlineRaw,
         CancellationToken cancellationToken)
     {
-        // NOTE: read the raw query here instead of trusting the [FromQuery] string? binding:
-        // simple-type binding only sees the FIRST occurrence of a repeated parameter,
-        // and an array binding would still split each value on commas.
-        // With multiple ?path= occurrences every value is taken as a literal path;
-        // with a single occurrence the legacy comma-split behaviour is preserved
-        // so already-shared download links keep working.
-        var rawPaths = Request.Query["path"];
-        var paths = rawPaths.Count > 1
-            ? rawPaths.Where(p => !string.IsNullOrEmpty(p)).Select(p => (string)p!).ToArray()
-            : pathsRaw?.Split(",", StringSplitOptions.RemoveEmptyEntries);
+        // Read the raw query here instead of trusting the [FromQuery] string? binding, which only sees the first
+        // occurrence of a repeated parameter
+        var paths = SelectedPaths(Request.Query["path"], pathsRaw);
         var isInline = isInlineRaw == 1;
 
 
@@ -131,7 +136,9 @@ public class ObjectDownloadsController : ControllerBaseEx
     /// </summary>
     /// <param name="orgSlug">The organization slug.</param>
     /// <param name="dsSlug">The dataset slug.</param>
-    /// <param name="pathsRaw">Comma-separated list of paths to download.</param>
+    /// <param name="pathsRaw">Paths to download: one or more "path" form fields (each occurrence is a literal
+    /// path, so file names may contain ',' and '&amp;'; a long selection is a form with one field per file) or a
+    /// single legacy comma-separated field.</param>
     /// <param name="isInlineRaw">If 1, display inline instead of as attachment.</param>
     /// <returns>The file(s) as a downloadable stream.</returns>
     [HttpPost("download", Name = nameof(ObjectsController) + "." + nameof(DownloadPost))]
@@ -146,7 +153,8 @@ public class ObjectDownloadsController : ControllerBaseEx
         [FromForm(Name = "inline")] int? isInlineRaw,
         CancellationToken cancellationToken)
     {
-        var paths = pathsRaw?.Split(",", StringSplitOptions.RemoveEmptyEntries);
+        // The same rule as the query: the [FromForm] string? binding sees the first "path" field only
+        var paths = SelectedPaths(Request.HasFormContentType ? Request.Form["path"] : default, pathsRaw);
         var isInline = isInlineRaw == 1;
 
 

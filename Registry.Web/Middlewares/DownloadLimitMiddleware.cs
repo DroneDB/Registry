@@ -17,8 +17,9 @@ namespace Registry.Web.Middlewares;
 /// endpoint /tasks/{id}/result) and enforces the configured limit. Admins are exempt.
 ///
 /// Supports a preflight check via the X-Download-Check header:
-/// when present, the middleware checks slot availability without acquiring,
-/// returning 200 or 429 immediately. This allows the frontend to verify
+/// when present on a download endpoint, the middleware checks slot availability without acquiring,
+/// returning 200 or 429 immediately (an empty 200 when the limiter is off or the caller is an administrator:
+/// the download itself is never started by a preflight). This allows the frontend to verify
 /// before initiating a native browser download.
 /// </summary>
 public partial class DownloadLimitMiddleware : IMiddleware
@@ -54,16 +55,25 @@ public partial class DownloadLimitMiddleware : IMiddleware
 
     public async Task InvokeAsync(HttpContext context, RequestDelegate next)
     {
-        // Skip if the limiter is disabled
-        if (!_downloadLimiter.IsEnabled)
+        // Only intercept download endpoints
+        var path = context.Request.Path.Value;
+        if (string.IsNullOrEmpty(path) || !DownloadPathRegex().IsMatch(path))
         {
             await next(context);
             return;
         }
 
-        // Only intercept download endpoints
-        var path = context.Request.Path.Value;
-        if (string.IsNullOrEmpty(path) || !DownloadPathRegex().IsMatch(path))
+        // Preflight check: X-Download-Check header means "just check, don't acquire". It is answered here
+        // whatever the limiter or the user: passing it on would send the whole download to a client that only
+        // asked whether a slot is free (and never reads the body)
+        if (context.Request.Headers.ContainsKey(PreflightHeader))
+        {
+            await AnswerPreflightAsync(context, path);
+            return;
+        }
+
+        // Skip if the limiter is disabled
+        if (!_downloadLimiter.IsEnabled)
         {
             await next(context);
             return;
@@ -78,20 +88,6 @@ public partial class DownloadLimitMiddleware : IMiddleware
 
         // Determine the key: authenticated user ID or remote IP for anonymous
         var key = GetLimiterKey(context);
-
-        // Preflight check: X-Download-Check header means "just check, don't acquire"
-        if (context.Request.Headers.ContainsKey(PreflightHeader))
-        {
-            if (_downloadLimiter.CanAcquireSlot(key))
-            {
-                context.Response.StatusCode = StatusCodes.Status200OK;
-                return;
-            }
-
-            _logger.LogDebug("Preflight download check failed for key '{Key}' on path '{Path}'", key, path);
-            await WriteTooManyRequestsResponse(context);
-            return;
-        }
 
         // Actual download: try to acquire a slot
         if (!_downloadLimiter.TryAcquireSlot(key))
@@ -110,6 +106,26 @@ public partial class DownloadLimitMiddleware : IMiddleware
             // Always release the slot, even if the request was cancelled or threw an exception
             _downloadLimiter.ReleaseSlot(key);
         }
+    }
+
+    /// <summary>
+    /// Answers the preflight with an empty 200 when a download of this caller would get a slot (always, when the
+    /// limiter is off or the caller is an administrator), otherwise with the 429 of a refused download.
+    /// </summary>
+    private async Task AnswerPreflightAsync(HttpContext context, string path)
+    {
+        if (_downloadLimiter.IsEnabled && !await _authManager.IsUserAdmin())
+        {
+            var key = GetLimiterKey(context);
+            if (!_downloadLimiter.CanAcquireSlot(key))
+            {
+                _logger.LogDebug("Preflight download check failed for key '{Key}' on path '{Path}'", key, path);
+                await WriteTooManyRequestsResponse(context);
+                return;
+            }
+        }
+
+        context.Response.StatusCode = StatusCodes.Status200OK;
     }
 
     /// <summary>
