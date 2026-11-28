@@ -211,7 +211,7 @@ public class DdbRuntimeTests
     public void ShutdownStages_Nest()
     {
         (ShutdownTimeouts.HangfireServer + ShutdownTimeouts.Ddb).ShouldBeLessThan(ShutdownTimeouts.Host);
-        ShutdownTimeouts.Host.ShouldBeLessThan(ShutdownTimeouts.ComposeStopGracePeriod);
+        (ShutdownTimeouts.Host + ShutdownTimeouts.IndexQueue).ShouldBeLessThan(ShutdownTimeouts.ComposeStopGracePeriod);
     }
 
     /// <summary>Docker kills a container after its stop_grace_period: every Registry service waits longer than the host.</summary>

@@ -90,7 +90,7 @@ public class ShareInitQuotaTests
         _manager = TestShares.Manager(Mock.Of<IObjectsManager>(), _datasets.Object, Mock.Of<IOrganizationsManager>(),
             utils.Datasets, _quota.Object, auth.Object,
             new DatasetAccessResolver(utils.Datasets, auth.Object, Mock.Of<IDdbManager>(), TestPaths.Policy),
-            tokens.Object, names.Object, _context, new FileSystem(), TestScratch.Provider, TimeProvider.System,
+            tokens.Object, names.Object, _context, new FileSystem(), TimeProvider.System,
             Mock.Of<IEntryCommandService>());
     }
 

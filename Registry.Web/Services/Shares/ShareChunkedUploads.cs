@@ -22,19 +22,17 @@ public sealed class ShareChunkedUploads
     private readonly ShareBatchStore _batches;
     private readonly IStorageQuota _quota;
     private readonly BatchChunkSessions _sessions;
-    private readonly ScratchFileProvider _scratch;
     private readonly IObjectsManager _objectsManager;
     private readonly DatasetPathPolicy _paths;
     private readonly ILogger<ShareChunkedUploads> _logger;
 
     public ShareChunkedUploads(ShareBatchStore batches, IStorageQuota quota, BatchChunkSessions sessions,
-        ScratchFileProvider scratch, IObjectsManager objectsManager, DatasetPathPolicy paths,
+        IObjectsManager objectsManager, DatasetPathPolicy paths,
         ILogger<ShareChunkedUploads> logger)
     {
         _batches = batches;
         _quota = quota;
         _sessions = sessions;
-        _scratch = scratch;
         _objectsManager = objectsManager;
         _paths = paths;
         _logger = logger;
@@ -130,18 +128,14 @@ public sealed class ShareChunkedUploads
         _logger.LogInformation("Finalizing chunked upload for file ID {FileId} to path {Path}", fileId, target.Path);
 
         // The chunks were written into one file at their offsets: taking it is a rename, and its
-        // hash was computed as the chunks arrived
+        // hash was computed as the chunks arrived. A commit that fails for a reason that passes gives it back
         var session = await _sessions.ForCallerAsync(batch, fileId);
         if (session.Status is null)
             throw new NotFoundException($"Unknown upload '{fileId}'");
         session.EnsureOwner();
 
-        using var temp = _scratch.CreateForDataset(ddb.DatasetFolderPath, DatasetUploads.TempFileExtension);
-        var hint = await _sessions.TakeAsync(session, temp.Path);
-        temp.Release(); // the commit moves it into place or deletes it
-
         var added = await _objectsManager.CommitStreamedAsync(orgSlug, dsSlug, target.Path,
-            new StreamedFile(temp.Path, hint.Size, hint));
+            await _sessions.TakeAsync(session));
         return await _batches.AddEntryAsync(batch, path, added, target.Replaced);
     }
 }

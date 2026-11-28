@@ -28,7 +28,11 @@ public sealed record ChunkManifest(string Path, long TotalSize, int TotalChunks,
 }
 
 /// <summary>Which chunks of an upload are stored.</summary>
-public sealed record ChunkStatus(ChunkManifest Manifest, IReadOnlyList<int> Received)
+/// <param name="Manifest">What defines the upload.</param>
+/// <param name="Received">The chunks stored.</param>
+/// <param name="Committing">A commit holds the file of the upload (it is not in the upload folder): another commit is
+/// refused until that one lets it go, and the upload ends or can be committed again then.</param>
+public sealed record ChunkStatus(ChunkManifest Manifest, IReadOnlyList<int> Received, bool Committing = false)
 {
     public IReadOnlyList<int> Missing =>
         Enumerable.Range(0, Manifest.TotalChunks).Except(Received).ToArray();

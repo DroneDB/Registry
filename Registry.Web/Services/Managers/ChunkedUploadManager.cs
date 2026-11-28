@@ -27,8 +27,7 @@ namespace Registry.Web.Services.Managers;
 /// another user does not exist for the caller (404). The Hub makes the file id from the dataset, the path, the size and
 /// the last-modified time of the file, so the same file selected again after a reload has the same id.
 /// </remarks>
-public sealed class ChunkedUploadManager(UploadManager uploads, ChunkStore store, UploadQuotaGuard quota,
-    ScratchFileProvider scratch)
+public sealed class ChunkedUploadManager(UploadManager uploads, ChunkStore store, UploadQuotaGuard quota)
 {
     /// <summary>Folder of the chunked uploads of a dataset, under its uploads folder.</summary>
     public static string ChunksRoot(IDDB ddb) =>
@@ -168,8 +167,12 @@ public sealed class ChunkedUploadManager(UploadManager uploads, ChunkStore store
     /// again (another upload may have written it since the first chunk) and the size is reserved in the quota of the
     /// owner before the chunks are taken, so a commit refused for its name, its quota or missing chunks keeps them: the
     /// same commit with <paramref name="overwrite"/> (the user chose to replace) or after room was made adds them
-    /// without sending them again. Once the file is taken it is moved into place and indexed by this request alone: a
-    /// failure there deletes it, the receipt records the failure and the chunks must be sent again.
+    /// without sending them again. Once the file is taken it is moved into place and indexed by this request alone. A
+    /// failure that passes (the index was busy, its write did not finish in time) gives the file back to the upload,
+    /// so the same commit made again adds it without sending the chunks again; while the index write of the file is
+    /// still running the commit is refused as one in progress (503), and the upload ends or can be committed again once
+    /// that write ends. Any other failure quarantines the file, the receipt records the failure and the chunks must be
+    /// sent again.
     /// </summary>
     /// <param name="orgSlug">The organization.</param>
     /// <param name="dsSlug">The dataset.</param>
@@ -194,6 +197,9 @@ public sealed class ChunkedUploadManager(UploadManager uploads, ChunkStore store
             var key = ctx.UploadId!;
             var status = store.GetStatus(root, key) ?? throw new NotFoundException($"Unknown upload '{fileId}'");
             EnsureOwner(ctx.User?.Id, status.Manifest, fileId);
+            // Before the name check: the file an earlier commit still holds may be the one at that name
+            if (status.Committing)
+                throw ChunkStore.BeingCommitted(fileId);
             var replace = overwrite || status.Manifest.Overwrite;
             if (status.Complete)
                 uploads.ResolveTarget(ctx, status.Manifest.Path, replace);
@@ -202,13 +208,9 @@ public sealed class ChunkedUploadManager(UploadManager uploads, ChunkStore store
             // committer only resizes this reservation to the size on disk
             ctx.Reservation = await quota.ReserveAsync(ctx.QuotaOwnerId, status.Manifest.TotalSize);
 
-            // The chunks were written into one file: taking it is a rename onto the dataset volume
-            using var temp = scratch.CreateForDataset(ctx.Ddb.DatasetFolderPath, DatasetUploads.TempFileExtension);
-            var hint = await store.TakeAsync(root, key, temp.Path);
-            temp.Release(); // the commit moves it into place or deletes it
-
-            return await uploads.CommitAsync(ctx, status.Manifest.Path, new StreamedFile(temp.Path, hint.Size, hint),
-                replace);
+            // The chunks were written into one file: the commit moves it into place, or gives it back to the upload
+            var file = await store.TakeAsync(root, key);
+            return await uploads.CommitAsync(ctx, status.Manifest.Path, file, replace);
         }
         catch (Exception ex)
         {

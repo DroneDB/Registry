@@ -7,6 +7,7 @@ using Registry.Web.Data.Models;
 using Registry.Web.Services.Adapters;
 using Registry.Web.Services.Managers;
 using Registry.Web.Services.Ports;
+using Registry.Web.Utilities;
 
 namespace Registry.Web.Services.Shares;
 
@@ -49,9 +50,8 @@ public sealed class BatchChunkSessions
     public Task<ChunkStatus> WriteAsync(BatchChunkSession session, int index, Stream body, CancellationToken ct) =>
         _chunks.WriteAsync(session.Root, session.Key, index, body, ct);
 
-    /// <summary>Moves the complete file of <paramref name="session"/> to <paramref name="destination"/>.</summary>
-    public Task<FileHashHint> TakeAsync(BatchChunkSession session, string destination) =>
-        _chunks.TakeAsync(session.Root, session.Key, destination);
+    /// <summary>Hands the complete file of <paramref name="session"/> to a commit (<see cref="ChunkStore.TakeAsync"/>).</summary>
+    public Task<StreamedFile> TakeAsync(BatchChunkSession session) => _chunks.TakeAsync(session.Root, session.Key);
 }
 
 /// <summary>The caller's chunk session of one file of a share batch (<see cref="BatchChunkSessions.ForCallerAsync"/>).</summary>

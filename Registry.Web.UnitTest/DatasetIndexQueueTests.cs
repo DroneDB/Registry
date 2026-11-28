@@ -3,8 +3,6 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
-using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Logging.Abstractions;
 using Moq;
 using NUnit.Framework;
 using Registry.Test.Common;
@@ -29,17 +27,8 @@ public class DatasetIndexQueueTests
         var ddbManager = new Mock<IDdbManager>();
         ddbManager.Setup(m => m.Get(It.IsAny<string>(), It.IsAny<Guid>())).Returns(ddb.Object);
 
-        var services = new ServiceCollection();
-        services.AddSingleton(ddbManager.Object);
-        var provider = services.BuildServiceProvider();
-        var scopeFactory = provider.GetRequiredService<IServiceScopeFactory>();
-
-        var settings = Microsoft.Extensions.Options.Options.Create(new AppSettings
-        {
-            IndexQueue = opts ?? new IndexQueueSettings { BatchWindowMs = 20, MaxBatchSize = 64 }
-        });
-
-        var queue = new DatasetIndexQueue(scopeFactory, NullLogger<DatasetIndexQueue>.Instance, TestSettings.Options<IndexQueueSettings>(settings), time);
+        var queue = TestIndexQueues.Create(ddbManager.Object,
+            opts ?? new IndexQueueSettings { BatchWindowMs = 20, MaxBatchSize = 64 }, time);
         return (queue, ddb);
     }
 
@@ -239,17 +228,7 @@ public class DatasetIndexQueueTests
         ddbManager.Setup(m => m.Get(It.IsAny<string>(), It.IsAny<Guid>()))
             .Throws(new InvalidOperationException("scope resolution failed"));
 
-        var services = new ServiceCollection();
-        services.AddSingleton(ddbManager.Object);
-        var provider = services.BuildServiceProvider();
-
-        var settings = Microsoft.Extensions.Options.Options.Create(new AppSettings
-        {
-            IndexQueue = new IndexQueueSettings()
-        });
-
-        var queue = new DatasetIndexQueue(provider.GetRequiredService<IServiceScopeFactory>(),
-            NullLogger<DatasetIndexQueue>.Instance, TestSettings.Options<IndexQueueSettings>(settings));
+        var queue = TestIndexQueues.Create(ddbManager.Object, new IndexQueueSettings());
 
         var key = new DatasetKey("org", Guid.NewGuid());
         var task = queue.EnqueueAsync(key, "a.txt");

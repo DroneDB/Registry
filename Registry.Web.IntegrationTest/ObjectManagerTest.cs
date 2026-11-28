@@ -783,8 +783,8 @@ public class ObjectManagerTest : TestBase
         // Simulates a native indexing failure after the file has already been moved into place.
         var failingIndexQueue = new Mock<IDatasetIndexQueue>();
         failingIndexQueue.Setup(q => q.EnqueueAsync(It.IsAny<DatasetKey>(), It.IsAny<IReadOnlyList<AddItem>>(),
-                It.IsAny<UploadTicket?>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync((DatasetKey _, IReadOnlyList<AddItem> items, UploadTicket? _, CancellationToken _) =>
+                It.IsAny<UploadTicket?>(), It.IsAny<LateIndexOutcome?>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync((DatasetKey _, IReadOnlyList<AddItem> items, UploadTicket? _, LateIndexOutcome? _, CancellationToken _) =>
                 items.Select(_ => new IndexOutcome(null, new InvalidOperationException("simulated index failure")))
                     .ToArray());
 
@@ -847,8 +847,8 @@ public class ObjectManagerTest : TestBase
 
         var failingIndexQueue = new Mock<IDatasetIndexQueue>();
         failingIndexQueue.Setup(q => q.EnqueueAsync(It.IsAny<DatasetKey>(), It.IsAny<IReadOnlyList<AddItem>>(),
-                It.IsAny<UploadTicket?>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync((DatasetKey _, IReadOnlyList<AddItem> items, UploadTicket? _, CancellationToken _) =>
+                It.IsAny<UploadTicket?>(), It.IsAny<LateIndexOutcome?>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync((DatasetKey _, IReadOnlyList<AddItem> items, UploadTicket? _, LateIndexOutcome? _, CancellationToken _) =>
                 items.Select(_ => new IndexOutcome(null, new InvalidOperationException("simulated index failure")))
                     .ToArray());
 
@@ -909,8 +909,8 @@ public class ObjectManagerTest : TestBase
         // entry for the real IsBuildable/EntryExists checks in finalization.
         okIndexQueue
             .Setup(q => q.EnqueueAsync(It.IsAny<DatasetKey>(), It.IsAny<IReadOnlyList<AddItem>>(),
-                It.IsAny<UploadTicket?>(), It.IsAny<CancellationToken>()))
-            .Returns((DatasetKey _, IReadOnlyList<AddItem> items, UploadTicket? _, CancellationToken _) =>
+                It.IsAny<UploadTicket?>(), It.IsAny<LateIndexOutcome?>(), It.IsAny<CancellationToken>()))
+            .Returns((DatasetKey _, IReadOnlyList<AddItem> items, UploadTicket? _, LateIndexOutcome? _, CancellationToken _) =>
             {
                 // The native Add validates containment against the dataset folder, so it wants
                 // the fully-qualified on-disk path (mirrors DDB.AddRaw -> GetLocalPath()).

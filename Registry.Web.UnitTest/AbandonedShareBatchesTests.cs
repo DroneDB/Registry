@@ -16,6 +16,7 @@ using Registry.Ports.DroneDB;
 using Registry.Web.Data;
 using Registry.Web.Data.Models;
 using Registry.Web.Exceptions;
+using Registry.Web.Models.Configuration;
 using Registry.Web.Models.DTO;
 using Registry.Web.Services.Adapters;
 using Registry.Web.Services.Caching;
@@ -260,7 +261,7 @@ public class AbandonedShareBatchesTests
         var ds = AddDataset("slow-link");
         var token = AddBatch(ds, TimeSpan.Zero, createdDataset: true);
         var uploads = new ShareChunkedUploads(Store(), Mock.Of<IStorageQuota>(),
-            new BatchChunkSessions(new ChunkStore(), DdbManager(), Mock.Of<IAuthManager>()), TestScratch.Provider,
+            new BatchChunkSessions(new ChunkStore(), DdbManager(), Mock.Of<IAuthManager>()),
             Mock.Of<IObjectsManager>(), TestPaths.Policy, NullLogger<ShareChunkedUploads>.Instance);
 
         for (var chunk = 0; chunk < 6; chunk++)
@@ -435,6 +436,84 @@ public class AbandonedShareBatchesTests
 
         _context.ChangeTracker.Clear();
         _context.Set<Entry>().AsNoTracking().Single().Replaced.ShouldBeFalse();
+    }
+
+    /// <summary>
+    /// A share upload whose index write outlasts the deadline (another process keeps the index locked): the batch takes
+    /// the file, the upload answers 503, and the batch then fails. The file is taken out of the dataset then, so it never
+    /// stays as an unindexed file that a retry would count as replaced: the retry writes the batch's own file, and the
+    /// rollback of the batch removes it (red before: the unindexed file stayed in the dataset after the failed write).
+    /// </summary>
+    [Test]
+    public async Task AShareUploadWhoseIndexWriteOutlastsTheDeadline_IsNeverReplaced_AndTheRollbackRemovesIt()
+    {
+        var ds = AddDataset("locked-index");
+        var token = AddBatch(ds, TimeSpan.Zero, createdDataset: false);
+        var fake = Fake(ds);
+        var index = new HeldIndex(fake.Ddb, path => fake.Indexed[path] = EntryType.Generic);
+        fake.Ddb.Setup(d => d.EntryExists(It.IsAny<string>())).Returns<string>(fake.Indexed.ContainsKey);
+        fake.Ddb.SetupBuilds();
+        using var queue = TestIndexQueues.Create(DdbManager(),
+            new IndexQueueSettings { BatchWindowMs = 20, MaxBatchSize = 64, EnqueueTimeoutSeconds = 1 });
+        var pipeline = UploadPipeline(ds, queue);
+        var objects = new Mock<IObjectsManager>();
+        objects.Setup(o => o.CommitStreamedAsync(Org, ds.Slug, It.IsAny<string>(), It.IsAny<StreamedFile>()))
+            .Returns(async (string org, string slug, string path, StreamedFile file) =>
+            {
+                using var ctx = await pipeline.BeginAsync(org, slug);
+                return await pipeline.CommitAsync(ctx, path, file);
+            });
+        var uploads = new ShareUploads(Store(), objects.Object, new FileSystem(), DdbManager(), TestPaths.Policy,
+            NullLogger<ShareUploads>.Instance);
+        var local = Local(ds, "late.jpg");
+        var hold = index.HoldNext();
+
+        await Should.ThrowAsync<TransientException>(async () =>
+            await uploads.UploadStreamed(token, "late.jpg", await StreamedTemp(ds, "first")));
+        File.Exists(local).ShouldBeTrue("the batch is still writing it");
+        ShareUploads.Target(TestPaths.Policy, fake.Ddb.Object, "late.jpg").Replaced.ShouldBeFalse();
+
+        hold.Busy();
+        await queue.DrainedAsync(new DatasetKey(Org, ds.InternalRef));
+        File.Exists(local).ShouldBeFalse();
+
+        await uploads.UploadStreamed(token, "late.jpg", await StreamedTemp(ds, "second"));
+        _context.ChangeTracker.Clear();
+        _context.Set<Entry>().AsNoTracking().Single().Replaced.ShouldBeFalse();
+        File.ReadAllText(local).ShouldBe("second");
+
+        _time.Advance(TimeSpan.FromHours(25));
+        await Run();
+
+        StatusOf(token).ShouldBe(BatchStatus.Rolledback);
+        File.Exists(local).ShouldBeFalse();
+        fake.Indexed.ShouldNotContainKey("late.jpg");
+    }
+
+    // A file streamed to the uploads folder of the dataset, as a share upload streams it
+    private async Task<StreamedFile> StreamedTemp(Dataset ds, string content)
+    {
+        using var body = new MemoryStream(System.Text.Encoding.UTF8.GetBytes(content));
+        return await DatasetUploads.StreamToTempAsync(TestScratch.Provider, new FileSystem(), Fake(ds).Root, body);
+    }
+
+    // The upload pipeline over the datasets of the tests and `queue` (no quota limit, nothing to build)
+    private Registry.Web.Services.Managers.UploadManager UploadPipeline(Dataset ds, DatasetIndexQueue queue)
+    {
+        var auth = new Mock<IAuthManager>();
+        auth.Setup(a => a.RequestAccess(It.IsAny<Dataset>(), Registry.Web.Services.Managers.AccessType.Write))
+            .ReturnsAsync(true);
+        auth.Setup(a => a.GetCurrentUser()).ReturnsAsync(new Registry.Web.Identity.Models.User { Id = "alice-id" });
+        var datasets = new Mock<IDatasetResolver>();
+        datasets.Setup(d => d.GetDatasetAsync(Org, ds.Slug, It.IsAny<bool>(), It.IsAny<bool>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(ds);
+        var options = Microsoft.Extensions.Options.Options.Create(TestSettings.Default);
+
+        return TestUploads.Create(auth.Object,
+            new DatasetAccessResolver(datasets.Object, auth.Object, DdbManager(), TestPaths.Policy), new FileSystem(),
+            TestSettings.Options<ThumbnailOptions>(options), TestSettings.Options<ImportSettings>(options),
+            TestJobs.Scheduler(), TestUploads.Guard(new UploadQuotaLedger(TimeSpan.FromMinutes(1)), Mock.Of<IStorageQuota>()),
+            Mock.Of<IDatasetChangeCoalescer>(), indexQueue: queue);
     }
 
     [Test]
@@ -677,7 +756,7 @@ public class AbandonedShareBatchesTests
         var token = AddBatch(ds, TimeSpan.Zero, createdDataset: false);
         var committed = new List<string>();
         var uploads = new ShareChunkedUploads(Store(), Mock.Of<IStorageQuota>(),
-            new BatchChunkSessions(new ChunkStore(), DdbManager(), Mock.Of<IAuthManager>()), TestScratch.Provider,
+            new BatchChunkSessions(new ChunkStore(), DdbManager(), Mock.Of<IAuthManager>()),
             Objects(ds, committed).Object, TestPaths.Policy, NullLogger<ShareChunkedUploads>.Instance);
 
         await using (var body = new MemoryStream("abcd"u8.ToArray()))

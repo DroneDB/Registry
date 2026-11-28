@@ -21,7 +21,7 @@ public static class TestShares
     public static ShareManager Manager(IObjectsManager objects, IDatasetsManager datasetsManager,
         IOrganizationsManager organizations, IDatasetResolver datasets, IStorageQuota quota, IAuthManager authManager,
         IDatasetAccessResolver access, IBatchTokenGenerator tokens, INameGenerator names, RegistryContext context,
-        IFileSystem fileSystem, ScratchFileProvider scratch, TimeProvider time, IEntryCommandService entries,
+        IFileSystem fileSystem, TimeProvider time, IEntryCommandService entries,
         ChunkStore? chunks = null, IDdbManager? ddbManager = null)
     {
         ddbManager ??= EmptyDatasets();
@@ -36,7 +36,7 @@ public static class TestShares
             new ShareBatches(store, rollback, targets, authManager, quota, NullLogger<ShareBatches>.Instance),
             new ShareUploads(store, objects, fileSystem, ddbManager, TestPaths.Policy, NullLogger<ShareUploads>.Instance),
             new ShareChunkedUploads(store, quota, new BatchChunkSessions(chunks ?? new ChunkStore(), ddbManager, authManager),
-                scratch, objects, TestPaths.Policy, NullLogger<ShareChunkedUploads>.Instance));
+                objects, TestPaths.Policy, NullLogger<ShareChunkedUploads>.Instance));
     }
 
     // Every dataset is empty and holds no file: nothing is replaced, a dataset that a batch created holds only its files

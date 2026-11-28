@@ -132,11 +132,97 @@ public sealed class UploadFiles
     }
 
     /// <summary>
+    /// What becomes of a file placed in the dataset that has no entry. An error that passes (the index is busy, its
+    /// write did not finish in time) takes the file back out (<see cref="Withdraw"/>), so the retry meets a free name and
+    /// the file is not left unindexed, which would be refused as a clash and counted as a replaced file by a share
+    /// batch. Anything else is quarantined. A file whose index write may still commit (<see cref="OutcomeUnknown"/>)
+    /// stays: taken out, the index would list it without its file once that write commits. Never throws.
+    /// </summary>
+    public void DropUnindexed(UploadRequestContext ctx, MovedUploadPart moved, Exception error)
+    {
+        if (OutcomeUnknown(error))
+            _logger.LogWarning(error, "'{Path}' in dataset '{OrgSlug}/{DsSlug}' may still be indexed: it stays",
+                moved.Part.Path, ctx.OrgSlug, ctx.DsSlug);
+        else if (error is TransientException or DdbBusyException)
+            Withdraw(ctx, moved, error);
+        else
+            Quarantine(ctx, moved.Part.Path, moved.LocalPath, error);
+    }
+
+    /// <summary>
+    /// Whether the index write of a file may still commit: a batch is writing it, or the wait for it was canceled
+    /// without the queue saying what became of it.
+    /// </summary>
+    public static bool OutcomeUnknown(Exception? error) =>
+        error is IndexWritePendingException or OperationCanceledException;
+
+    /// <summary>
+    /// The index write of a file left in place because it was still running when its request stopped waiting has
+    /// failed after all: the file is taken out as <see cref="DropUnindexed"/> takes it out at once, unless the dataset
+    /// has made it its own meanwhile: another upload put its file at that path (the file there is not this upload's),
+    /// or a new file was indexed under the name. Never throws.
+    /// </summary>
+    /// <returns>Whether the file of this upload stays in the dataset as an entry (indexed meanwhile).</returns>
+    public bool DropUnindexedLate(UploadRequestContext ctx, MovedUploadPart moved, Exception error)
+    {
+        // What holds the path when that cannot be told: the file stays, for the reconciliation sweep
+        var holder = BestEffort.Get(() => HolderOf(ctx, moved), ex =>
+        {
+            _logger.LogError(ex, "Cannot tell whether '{Path}' in dataset '{OrgSlug}/{DsSlug}' is still the upload's: " +
+                                 "it stays", moved.Part.Path, ctx.OrgSlug, ctx.DsSlug);
+            return PathHolder.Index;
+        });
+
+        switch (holder)
+        {
+            case PathHolder.OtherUpload:
+                _logger.LogInformation(error, "'{Path}' in dataset '{OrgSlug}/{DsSlug}' was not indexed, and the file " +
+                                              "at its path is no longer the upload's: it is left as it is",
+                    moved.Part.Path, ctx.OrgSlug, ctx.DsSlug);
+                return false;
+            case PathHolder.Index:
+                _logger.LogInformation(error, "'{Path}' in dataset '{OrgSlug}/{DsSlug}' was indexed by another write " +
+                                              "meanwhile: it stays", moved.Part.Path, ctx.OrgSlug, ctx.DsSlug);
+                return true;
+            default:
+                DropUnindexed(ctx, moved, error);
+                return false;
+        }
+    }
+
+    private enum PathHolder
+    {
+        // The file this upload moved there, which nothing indexed
+        Upload,
+
+        // Not that file any more: another upload wrote the path since, or the file is gone
+        OtherUpload,
+
+        // The file this upload moved there, indexed by another write meanwhile
+        Index
+    }
+
+    private PathHolder HolderOf(UploadRequestContext ctx, MovedUploadPart moved)
+    {
+        if (!IsPlacedFile(moved))
+            return PathHolder.OtherUpload;
+        return !moved.ReplacedFile && ctx.Ddb.EntryExists(moved.Part.Path) ? PathHolder.Index : PathHolder.Upload;
+    }
+
+    // Whether the file at the dataset path is still the one this upload moved there: the move keeps the size and the
+    // write time it had after it was written (its hash hint), a file written there since has others
+    private bool IsPlacedFile(MovedUploadPart moved) =>
+        _fs.Exists(moved.LocalPath) &&
+        _fs.GetFileSize(moved.LocalPath) == moved.Part.File.Hash.Size &&
+        _fs.GetLastWriteTime(moved.LocalPath).ToUniversalTime() == moved.Part.File.Hash.ModifiedUtc;
+
+    /// <summary>
     /// Takes back a file that was placed in the dataset and could not be indexed for a reason that passes (the index is
     /// busy, or its write did not finish in time): the file goes back to the temporary path it was streamed to, which
-    /// the commit deletes, so the name is free again and the same upload sent once more is not refused as a clash with
-    /// a file the dataset does not list. A file that replaced another one stays: the old content is gone, and the index
-    /// still lists its name. Never throws: a file that cannot be moved back is quarantined.
+    /// the commit deletes (or leaves to its <see cref="StreamedFile.Source"/>), so the name is free again and the same
+    /// upload sent once more is not refused as a clash with a file the dataset does not list. A file that replaced
+    /// another one stays: the old content is gone, and the index still lists its name. Never throws: a file that cannot
+    /// be moved back is quarantined.
     /// </summary>
     public void Withdraw(UploadRequestContext ctx, MovedUploadPart moved, Exception cause)
     {
@@ -197,10 +283,29 @@ public sealed class UploadFiles
         }
     }
 
-    /// <summary>Deletes the temp file of a part when it is in this dataset's uploads folder (a path outside it is never ours to delete).</summary>
+    /// <summary>
+    /// The commit is done with the temp file of a part: deleted when it is in this dataset's uploads folder (a path
+    /// outside it is never ours to delete), or handed back to its <see cref="StreamedFile.Source"/>, which keeps what is
+    /// still there. Never throws.
+    /// </summary>
     public void DeleteLeftover(UploadRequestContext ctx, StreamedFile file)
     {
-        if (!string.IsNullOrWhiteSpace(file.TempPath) && IsInUploadsFolder(ctx.Ddb, file.TempPath))
+        if (!HandBack(file, _logger) && !string.IsNullOrWhiteSpace(file.TempPath) &&
+            IsInUploadsFolder(ctx.Ddb, file.TempPath))
             _fs.TryDelete(file.TempPath); // else the abandoned-upload sweep removes it
+    }
+
+    /// <summary>
+    /// Hands a temp file that outlives the request back to its <see cref="StreamedFile.Source"/>; false when it has
+    /// none (the temp file is the commit's to delete). Never throws.
+    /// </summary>
+    public static bool HandBack(StreamedFile file, ILogger logger)
+    {
+        if (file.Source is not { } source)
+            return false;
+
+        BestEffort.Run(source.Release,
+            ex => logger.LogError(ex, "Cannot hand back the temp upload '{TempFile}'", file.TempPath));
+        return true;
     }
 }

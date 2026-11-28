@@ -131,7 +131,7 @@ public class ShareAccessTests
         _manager = TestShares.Manager(_objects.Object,
             _datasets.Object, Mock.Of<IOrganizationsManager>(), utils.Datasets, utils.Quota, _auth.Object,
             new DatasetAccessResolver(utils.Datasets, _auth.Object, Mock.Of<IDdbManager>(), TestPaths.Policy), tokens.Object,
-            names.Object, _context, new FileSystem(), TestScratch.Provider, _time, Mock.Of<IEntryCommandService>());
+            names.Object, _context, new FileSystem(), _time, Mock.Of<IEntryCommandService>());
     }
 
     [TearDown]

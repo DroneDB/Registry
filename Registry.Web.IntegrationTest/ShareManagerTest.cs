@@ -148,7 +148,7 @@ sealed class ShareManagerTest : TestBase
             datasetManager, organizationsManager, webUtils.Datasets, webUtils.Quota, _authManagerMock.Object,
             new DatasetAccessResolver(webUtils.Datasets, _authManagerMock.Object, _ddbFactoryMock.Object, TestPaths.Policy),
             new BatchTokenGenerator(TestSettings.Options<ShareOptions>(_settingsOptions), _batchTokenGeneratorLogger),
-            new NameGenerator(TestSettings.Options<ShareOptions>(_settingsOptions), _nameGeneratorLogger), context, _fileSystem, TestScratch.Provider, TimeProvider.System, objectServices.Commands);
+            new NameGenerator(TestSettings.Options<ShareOptions>(_settingsOptions), _nameGeneratorLogger), context, _fileSystem, TimeProvider.System, objectServices.Commands);
 
         // TEST
 
@@ -246,7 +246,7 @@ sealed class ShareManagerTest : TestBase
             datasetManager, organizationsManager, webUtils.Datasets, webUtils.Quota, _authManagerMock.Object,
             new DatasetAccessResolver(webUtils.Datasets, _authManagerMock.Object, _ddbFactoryMock.Object, TestPaths.Policy),
             new BatchTokenGenerator(TestSettings.Options<ShareOptions>(_settingsOptions), _batchTokenGeneratorLogger),
-            new NameGenerator(TestSettings.Options<ShareOptions>(_settingsOptions), _nameGeneratorLogger), context, _fileSystem, TestScratch.Provider, TimeProvider.System, objectServices.Commands);
+            new NameGenerator(TestSettings.Options<ShareOptions>(_settingsOptions), _nameGeneratorLogger), context, _fileSystem, TimeProvider.System, objectServices.Commands);
 
         // TEST
 
@@ -341,7 +341,7 @@ sealed class ShareManagerTest : TestBase
             datasetManager, organizationsManager, webUtils.Datasets, webUtils.Quota, _authManagerMock.Object,
             new DatasetAccessResolver(webUtils.Datasets, _authManagerMock.Object, _ddbFactoryMock.Object, TestPaths.Policy),
             new BatchTokenGenerator(TestSettings.Options<ShareOptions>(_settingsOptions), _batchTokenGeneratorLogger),
-            new NameGenerator(TestSettings.Options<ShareOptions>(_settingsOptions), _nameGeneratorLogger), context, _fileSystem, TestScratch.Provider, TimeProvider.System, objectServices.Commands);
+            new NameGenerator(TestSettings.Options<ShareOptions>(_settingsOptions), _nameGeneratorLogger), context, _fileSystem, TimeProvider.System, objectServices.Commands);
 
         // TEST
 
@@ -471,7 +471,7 @@ sealed class ShareManagerTest : TestBase
             datasetManager, organizationsManager, webUtils.Datasets, webUtils.Quota, _authManagerMock.Object,
             new DatasetAccessResolver(webUtils.Datasets, _authManagerMock.Object, _ddbFactoryMock.Object, TestPaths.Policy),
             new BatchTokenGenerator(TestSettings.Options<ShareOptions>(_settingsOptions), _batchTokenGeneratorLogger),
-            new NameGenerator(TestSettings.Options<ShareOptions>(_settingsOptions), _nameGeneratorLogger), context, _fileSystem, TestScratch.Provider, TimeProvider.System, objectServices.Commands);
+            new NameGenerator(TestSettings.Options<ShareOptions>(_settingsOptions), _nameGeneratorLogger), context, _fileSystem, TimeProvider.System, objectServices.Commands);
 
         // TEST
 
@@ -611,7 +611,7 @@ sealed class ShareManagerTest : TestBase
             datasetManager, organizationsManager, webUtils.Datasets, webUtils.Quota, _authManagerMock.Object,
             new DatasetAccessResolver(webUtils.Datasets, _authManagerMock.Object, _ddbFactoryMock.Object, TestPaths.Policy),
             new BatchTokenGenerator(TestSettings.Options<ShareOptions>(_settingsOptions), _batchTokenGeneratorLogger),
-            new NameGenerator(TestSettings.Options<ShareOptions>(_settingsOptions), _nameGeneratorLogger), context, _fileSystem, TestScratch.Provider, TimeProvider.System, objectServices.Commands);
+            new NameGenerator(TestSettings.Options<ShareOptions>(_settingsOptions), _nameGeneratorLogger), context, _fileSystem, TimeProvider.System, objectServices.Commands);
 
         // TEST
         const string fileName = "DJI_0028.JPG";
@@ -734,7 +734,7 @@ sealed class ShareManagerTest : TestBase
             datasetManager, organizationsManager, webUtils.Datasets, webUtils.Quota, _authManagerMock.Object,
             new DatasetAccessResolver(webUtils.Datasets, _authManagerMock.Object, _ddbFactoryMock.Object, TestPaths.Policy),
             new BatchTokenGenerator(TestSettings.Options<ShareOptions>(_settingsOptions), _batchTokenGeneratorLogger),
-            new NameGenerator(TestSettings.Options<ShareOptions>(_settingsOptions), _nameGeneratorLogger), context, _fileSystem, TestScratch.Provider, TimeProvider.System, objectServices.Commands);
+            new NameGenerator(TestSettings.Options<ShareOptions>(_settingsOptions), _nameGeneratorLogger), context, _fileSystem, TimeProvider.System, objectServices.Commands);
 
         // TEST
 

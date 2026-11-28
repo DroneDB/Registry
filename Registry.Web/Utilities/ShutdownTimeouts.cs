@@ -11,8 +11,10 @@ namespace Registry.Web.Utilities;
 /// <c>StoppedAsync</c>, after every hosted service stopped;</item>
 /// <item>the host gives the whole stop <see cref="Host"/> (<c>HostOptions.ShutdownTimeout</c>), more
 /// than the two stages above;</item>
+/// <item>then the services are disposed: the index queue lets a batch still running end within
+/// <see cref="IndexQueue"/>, so the uploads that stopped waiting for it learn its outcome;</item>
 /// <item>Docker waits <c>stop_grace_period</c> (the compose files) before it kills the container,
-/// more than <see cref="Host"/>: <see cref="ComposeStopGracePeriod"/>.</item>
+/// more than <see cref="Host"/> and <see cref="IndexQueue"/>: <see cref="ComposeStopGracePeriod"/>.</item>
 /// </list>
 /// A test checks the nesting and the compose files.
 /// </summary>
@@ -26,6 +28,9 @@ public static class ShutdownTimeouts
 
     /// <summary><c>HostOptions.ShutdownTimeout</c>: the Hangfire drain, the libddb shutdown and a margin.</summary>
     public static readonly TimeSpan Host = TimeSpan.FromSeconds(30);
+
+    /// <summary>How long the disposal of the index queue waits for the batches still running.</summary>
+    public static readonly TimeSpan IndexQueue = TimeSpan.FromSeconds(5);
 
     /// <summary>The <c>stop_grace_period</c> of the Registry services in the compose files.</summary>
     public static readonly TimeSpan ComposeStopGracePeriod = TimeSpan.FromSeconds(40);

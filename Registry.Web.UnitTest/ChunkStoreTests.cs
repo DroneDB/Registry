@@ -45,12 +45,15 @@ public class ChunkStoreTests
 
     private static string Sha(byte[] data) => Convert.ToHexStringLower(SHA256.HashData(data));
 
+    // Takes the file as a commit does: moves it away, then lets it go
     private async Task<(byte[] Content, string Sha256)> Take(ChunkStore store, string fileId = "file-0001")
     {
         var destination = Path.Combine(_root, "out.bin");
-        var hint = await store.TakeAsync(_root, fileId, destination);
-        hint.Size.ShouldBe(_file.Length);
-        return (await File.ReadAllBytesAsync(destination), hint.Sha256);
+        var file = await store.TakeAsync(_root, fileId);
+        file.Hash.Size.ShouldBe(_file.Length);
+        File.Move(file.TempPath, destination, overwrite: true);
+        file.Source!.Release();
+        return (await File.ReadAllBytesAsync(destination), file.Hash.Sha256);
     }
 
     // FR-UPL-03: an upload started before the overwrite field existed replaced; it still does after an update
@@ -108,7 +111,7 @@ public class ChunkStoreTests
         status.Received.ShouldBe([0, 3]);
         status.Missing.ShouldBe([1, 2]);
 
-        var ex = await Should.ThrowAsync<ConflictException>(() => store.TakeAsync(_root, "file-0001", Path.Combine(_root, "x")));
+        var ex = await Should.ThrowAsync<ConflictException>(() => store.TakeAsync(_root, "file-0001"));
         ex.Message.ShouldContain("1,2");
     }
 
@@ -217,8 +220,8 @@ public class ChunkStoreTests
         Directory.Exists(expired).ShouldBeFalse("a session with a file id goes after 7 days");
     }
 
-    // The rename onto the dataset volume keeps the write time of the last chunk: a file taken from a session whose last
-    // chunk is old would be swept as an abandoned temp file while its commit is moving it, so the taken file is dated now
+    // The data file keeps the write time of the last chunk: a file taken from a session whose last chunk is old would
+    // be swept with its abandoned session while its commit is moving it, so the taken file is dated now
     [Test]
     public async Task TakenFile_OfAnOldSession_IsNotSweptAsAbandoned()
     {
@@ -228,16 +231,68 @@ public class ChunkStoreTests
         await store.OpenAsync(chunks, "file-0001", _manifest);
         for (var i = 0; i < 4; i++)
             await store.WriteAsync(chunks, "file-0001", i, Chunk(i));
-        File.SetLastWriteTimeUtc(Path.Combine(chunks, "file-0001", ChunkStore.DataFileName), DateTime.UtcNow.AddDays(-2));
+        foreach (var path in Directory.EnumerateFileSystemEntries(Path.Combine(chunks, "file-0001"), "*",
+                     SearchOption.AllDirectories).Append(Path.Combine(chunks, "file-0001")))
+            File.SetLastWriteTimeUtc(path, DateTime.UtcNow.AddDays(-2));
 
-        var taken = Path.Combine(dataset, ".uploads", "taken.tmp");
-        var hint = await store.TakeAsync(chunks, "file-0001", taken);
+        var taken = await store.TakeAsync(chunks, "file-0001");
 
-        (DateTime.UtcNow - File.GetLastWriteTimeUtc(taken)).ShouldBeLessThan(TimeSpan.FromMinutes(1));
-        hint.ModifiedUtc.ShouldBe(File.GetLastWriteTimeUtc(taken), "the hint is the write time the file has");
+        (DateTime.UtcNow - File.GetLastWriteTimeUtc(taken.TempPath)).ShouldBeLessThan(TimeSpan.FromMinutes(1));
+        taken.Hash.ModifiedUtc.ShouldBe(File.GetLastWriteTimeUtc(taken.TempPath), "the hint is the write time the file has");
         Registry.Web.Utilities.DatasetUploads.RemoveAbandoned(new Registry.Adapters.FileSystem(), dataset,
-            DateTime.UtcNow, TimeSpan.FromHours(24)).ShouldBe(0);
-        File.Exists(taken).ShouldBeTrue();
+            DateTime.UtcNow, TimeSpan.FromHours(24), chunks: store).ShouldBe(0);
+        File.Exists(taken.TempPath).ShouldBeTrue();
+    }
+
+    /// <summary>
+    /// A commit that gives the file back (its index write failed for a reason that passes) leaves the session as it was:
+    /// the same file can be committed again, with the same hash and without sending a chunk again; while the commit
+    /// holds the file a second commit is refused as one in progress (red before: the take removed the session, and the
+    /// commit made again was refused as an unknown upload).
+    /// </summary>
+    [Test]
+    public async Task AFileGivenBack_CanBeTakenAgain_AndAHeldOneIsRefused()
+    {
+        var store = new ChunkStore();
+        await store.OpenAsync(_root, "file-0001", _manifest);
+        for (var i = 0; i < 4; i++)
+            await store.WriteAsync(_root, "file-0001", i, Chunk(i));
+
+        var first = await store.TakeAsync(_root, "file-0001");
+        store.GetStatus(_root, "file-0001")!.Committing.ShouldBeTrue();
+        await Should.ThrowAsync<TransientException>(() => store.TakeAsync(_root, "file-0001"));
+
+        // Moved into the dataset, then taken back out: the commit lets it go
+        var placed = Path.Combine(_root, "placed.bin");
+        File.Move(first.TempPath, placed);
+        File.Move(placed, first.TempPath);
+        first.Source!.Release();
+
+        var status = store.GetStatus(_root, "file-0001")!;
+        status.Complete.ShouldBeTrue();
+        status.Committing.ShouldBeFalse();
+
+        var (content, sha) = await Take(new ChunkStore());
+        content.ShouldBe(_file);
+        sha.ShouldBe(Sha(_file));
+        sha.ShouldBe(first.Hash.Sha256);
+        Directory.Exists(Path.Combine(_root, "file-0001")).ShouldBeFalse("a file that left the session ends it");
+    }
+
+    /// <summary>The second take of a file given back in the same process uses the hash already computed.</summary>
+    [Test]
+    public async Task AFileGivenBack_KeepsItsHash_InTheSameStore()
+    {
+        var store = new ChunkStore();
+        await store.OpenAsync(_root, "file-0001", _manifest);
+        for (var i = 0; i < 4; i++)
+            await store.WriteAsync(_root, "file-0001", i, Chunk(i));
+
+        var first = await store.TakeAsync(_root, "file-0001");
+        first.Source!.Release();
+        var (_, sha) = await Take(store);
+
+        sha.ShouldBe(Sha(_file));
     }
 
     // A chunk session folder (manifest, data file, one marker) whose last write is `lastWrite`

@@ -23,8 +23,13 @@ public sealed class UploadIndexer
     /// <summary>Registers the upload of <paramref name="ctx"/> with the index lane, or null when there is no lane.</summary>
     public UploadTicket? BeginUpload(UploadRequestContext ctx) => _indexQueue?.BeginUpload(ctx.Key);
 
-    /// <summary>One index batch for every file of the request; each file gets its own entry or error.</summary>
-    public async Task IndexAsync(UploadRequestContext ctx, IReadOnlyList<MovedUploadPart> parts)
+    /// <summary>
+    /// One index batch for every file of the request; each file gets its own entry or error. A file whose write was
+    /// still running when the request stopped waiting (<c>IndexWritePendingException</c>) has its final outcome told
+    /// to <paramref name="late"/> by its position in <paramref name="parts"/>, once that write ends.
+    /// </summary>
+    public async Task IndexAsync(UploadRequestContext ctx, IReadOnlyList<MovedUploadPart> parts,
+        LateIndexOutcome? late = null)
     {
         if (parts.Count == 0)
         {
@@ -39,7 +44,7 @@ public sealed class UploadIndexer
             // Coalesces with other concurrent uploads to the same dataset into one native batch and
             // one write transaction; the hashes computed while streaming save reading the files again.
             var outcomes = await _indexQueue.EnqueueAsync(ctx.Key,
-                parts.Select(p => new AddItem(p.Part.Path, p.Part.File.Hash)).ToArray(), ctx.Ticket);
+                parts.Select(p => new AddItem(p.Part.Path, p.Part.File.Hash)).ToArray(), ctx.Ticket, late);
             for (var i = 0; i < parts.Count; i++)
             {
                 parts[i].Entry = outcomes[i].Entry;

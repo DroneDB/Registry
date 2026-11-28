@@ -78,8 +78,10 @@ public class ObjectsManager : IObjectsManager
         }
         catch
         {
-            // Refused before the commit (access, dataset): drop our own temp file, never a foreign one
-            await DeleteStreamedTempAsync(orgSlug, dsSlug, file.TempPath);
+            // Refused before the commit (access, dataset): drop our own temp file, never a foreign one, and hand a
+            // file that outlives the request back to its owner
+            if (!UploadFiles.HandBack(file, _logger))
+                await DeleteStreamedTempAsync(orgSlug, dsSlug, file.TempPath);
             throw;
         }
 

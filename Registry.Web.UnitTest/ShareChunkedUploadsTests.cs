@@ -89,7 +89,7 @@ public class ShareChunkedUploadsTests
         ddbManager.Setup(m => m.Get(It.IsAny<string>(), It.IsAny<Guid>())).Returns(ddb.Object);
 
         return new ShareChunkedUploads(store, Mock.Of<IStorageQuota>(),
-            new BatchChunkSessions(_chunks, ddbManager.Object, auth.Object), TestScratch.Provider,
+            new BatchChunkSessions(_chunks, ddbManager.Object, auth.Object),
             Mock.Of<IObjectsManager>(), TestPaths.Policy, NullLogger<ShareChunkedUploads>.Instance);
     }
 

@@ -248,7 +248,8 @@ public class DatasetIndexQueueUploadTests
     /// <summary>
     /// The queue shuts down while a native batch is writing a file: as at the deadline, its outcome is reported as
     /// pending, so the upload leaves the file in place, and the batch still indexes it (red before: the shutdown threw
-    /// a cancellation that dropped every outcome, and the upload quarantined a file the batch then indexed).
+    /// a cancellation that dropped every outcome, and the upload quarantined a file the batch then indexed). The
+    /// shutdown lets that batch end, and its outcome reaches the caller that stopped waiting.
     /// </summary>
     [Test]
     public async Task AtTheShutdown_AFileABatchIsWriting_IsReportedPending_AndTheBatchStillIndexesIt()
@@ -267,17 +268,21 @@ public class DatasetIndexQueueUploadTests
             });
         var key = new DatasetKey("org", Guid.NewGuid());
 
+        var told = new TaskCompletionSource<IndexOutcome>(TaskCreationOptions.RunContinuationsAsynchronously);
+        Task disposed;
+
         try
         {
             using var ticket = queue.BeginUpload(key);
-            var slow = queue.EnqueueAsync(key, [Hinted("slow.jpg")], ticket);
+            var slow = queue.EnqueueAsync(key, [Hinted("slow.jpg")], ticket, (_, late) => told.TrySetResult(late));
             await writing.Task;
 
-            queue.Dispose();
+            disposed = Task.Run(queue.Dispose);
             var outcome = (await slow).Single();
 
             outcome.Entry.ShouldBeNull();
             outcome.Error.ShouldBeOfType<IndexWritePendingException>().Path.ShouldBe("slow.jpg");
+            disposed.IsCompleted.ShouldBeFalse("the shutdown waits for the batch that is still writing");
         }
         finally
         {
@@ -285,6 +290,78 @@ public class DatasetIndexQueueUploadTests
         }
 
         (await written.Task).ShouldBe("slow.jpg");
+        (await told.Task).Entry!.Path.ShouldBe("slow.jpg");
+        await disposed;
+    }
+
+    /// <summary>
+    /// A caller that stopped waiting while a batch was writing its files is told what became of each of them once that
+    /// batch ends, by the lane itself and before its next batch starts, so nothing else this lane writes reaches the
+    /// index while the caller acts on the outcome (takes a failed file out). A file no batch took is never told: its
+    /// outcome was known at once (red before: the outcome of the batch was lost, and a failed file stayed unindexed).
+    /// </summary>
+    [Test]
+    public async Task AtTheDeadline_AFileABatchIsWriting_IsToldItsOutcome_BeforeTheNextBatch([Values] bool fails)
+    {
+        var settings = new IndexQueueSettings { BatchWindowMs = 5000, MaxBatchSize = 1, EnqueueTimeoutSeconds = 5 };
+        var time = new FakeTime(DateTime.UtcNow);
+        var (queue, ddb) = CreateQueue(settings, time);
+        var writing = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        using var finish = new ManualResetEventSlim();
+        var calls = 0;
+        ddb.Setup(d => d.AddRawBatchWithOptions(It.IsAny<IReadOnlyList<AddItem>>(), It.IsAny<bool>()))
+            .Returns((IReadOnlyList<AddItem> items, bool _) =>
+            {
+                if (Interlocked.Increment(ref calls) == 1)
+                {
+                    writing.TrySetResult();
+                    finish.Wait(TimeSpan.FromMinutes(1));
+                    if (fails)
+                        throw new DdbException("disk I/O error");
+                }
+
+                return new BatchAddResult { Entries = [.. items.Select(i => MakeAdded(i.Path))] };
+            });
+        var key = new DatasetKey("org", Guid.NewGuid());
+        var told = new List<(int Item, IndexOutcome Outcome, int CallsThen)>();
+        Task<IReadOnlyList<IndexOutcome>> following;
+
+        try
+        {
+            using var ticket = queue.BeginUpload(key);
+            // MaxBatchSize 1: the first file is written alone, the second waits behind it and is dropped at the deadline
+            var slow = queue.EnqueueAsync(key, [Hinted("slow.jpg"), Hinted("waiting.jpg")], ticket, (item, outcome) =>
+            {
+                lock (told) told.Add((item, outcome, Volatile.Read(ref calls)));
+            });
+            await writing.Task;
+
+            time.Advance(TimeSpan.FromSeconds(settings.EnqueueTimeoutSeconds));
+            var outcomes = await slow;
+            outcomes[0].Error.ShouldBeOfType<IndexWritePendingException>();
+            outcomes[1].Error.ShouldBeOfType<TransientException>().ShouldNotBeOfType<IndexWritePendingException>();
+
+            // Queued behind the batch still writing
+            using var next = queue.BeginUpload(key);
+            following = queue.EnqueueAsync(key, [Hinted("next.jpg")], next);
+        }
+        finally
+        {
+            finish.Set();
+        }
+
+        (await following).Single().Entry!.Path.ShouldBe("next.jpg");
+
+        lock (told)
+        {
+            told.Count.ShouldBe(1, "only the file a batch was writing");
+            told[0].Item.ShouldBe(0);
+            told[0].CallsThen.ShouldBe(1, "told before the next batch started");
+            if (fails)
+                told[0].Outcome.Error.ShouldBeOfType<DdbException>().Message.ShouldContain("disk I/O");
+            else
+                told[0].Outcome.Entry!.Path.ShouldBe("slow.jpg");
+        }
     }
 
     [Test]

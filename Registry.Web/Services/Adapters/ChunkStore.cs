@@ -29,6 +29,9 @@ public sealed partial class ChunkStore
     public const string DataFileName = "data.bin";
     public const string ReceivedFolderName = "received";
 
+    /// <summary>The name the data file has while a commit holds it (<see cref="TakeAsync"/>).</summary>
+    public const string CommittingFileName = "committing.bin";
+
     private const int BufferSize = 1024 * 1024;
 
     /// <summary>
@@ -45,6 +48,13 @@ public sealed partial class ChunkStore
         public readonly SemaphoreSlim Lock = new(1, 1);
         public IncrementalHash? Hash;
         public int Hashed; // chunks [0, Hashed) are in Hash
+        public string? Digest; // the SHA-256 of the complete file, once taken
+    }
+
+    // The file of an upload while a commit holds it
+    private sealed class HeldFile(ChunkStore store, string folder) : IUploadSource
+    {
+        public void Release() => store.Release(folder);
     }
 
     private readonly ConcurrentDictionary<string, Upload> _uploads = new();
@@ -112,6 +122,7 @@ public sealed partial class ChunkStore
             upload.Hash?.Dispose();
             upload.Hash = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
             upload.Hashed = 0;
+            upload.Digest = null;
             return new ChunkStatus(manifest, []);
         }
         finally
@@ -120,10 +131,13 @@ public sealed partial class ChunkStore
         }
     }
 
+    // Whether the upload of `folder` exists: its manifest is written last when it starts, and removed first when it goes
+    private static bool HasManifest(string folder) => File.Exists(Path.Combine(folder, ManifestFileName));
+
     // The state of an upload that exists with the same manifest; null when there is none
     private static ChunkStatus? TryResume(string folder, string fileId, ChunkManifest manifest)
     {
-        if (!File.Exists(Path.Combine(folder, ManifestFileName)))
+        if (!HasManifest(folder))
             return null;
 
         var existing = ReadManifest(folder);
@@ -160,7 +174,7 @@ public sealed partial class ChunkStore
         {
             try
             {
-                if (File.Exists(Path.Combine(folder, ManifestFileName)))
+                if (HasManifest(folder))
                     uploads.Add(Status(folder, ReadManifest(folder)));
             }
             catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidOperationException
@@ -237,7 +251,7 @@ public sealed partial class ChunkStore
         var dropped = 0;
         foreach (var (folder, upload) in _uploads)
         {
-            if (File.Exists(Path.Combine(folder, ManifestFileName)) || !upload.Lock.Wait(0))
+            if (HasManifest(folder) || !upload.Lock.Wait(0))
                 continue;
             try
             {
@@ -257,7 +271,7 @@ public sealed partial class ChunkStore
     public ChunkStatus? GetStatus(string root, string fileId)
     {
         var folder = Folder(root, fileId);
-        return File.Exists(Path.Combine(folder, ManifestFileName)) ? Status(folder, ReadManifest(folder)) : null;
+        return HasManifest(folder) ? Status(folder, ReadManifest(folder)) : null;
     }
 
     /// <summary>
@@ -355,11 +369,17 @@ public sealed partial class ChunkStore
     }
 
     /// <summary>
-    /// Moves the finished file to <paramref name="destination"/> and forgets the upload.
+    /// Hands the finished file to a commit: its data file becomes <see cref="CommittingFileName"/> in the upload folder,
+    /// which the commit moves into the dataset. The upload stays until the commit lets the file go
+    /// (<see cref="IUploadSource.Release"/> of the file's <see cref="StreamedFile.Source"/>): a file back at its path is
+    /// the data file again, so a commit that failed for a reason that passes (the index was busy) can be made again
+    /// without sending the chunks again; a file that left it for good (indexed, quarantined) ends the upload. While a
+    /// commit holds the file, another commit is refused.
     /// </summary>
-    /// <returns>The file's hash hint (its SHA-256, size and write time).</returns>
+    /// <returns>The file, with its hash hint (its SHA-256, size and write time).</returns>
     /// <exception cref="Registry.Web.Exceptions.RecoverableConflictException">Chunks are missing.</exception>
-    public async Task<FileHashHint> TakeAsync(string root, string fileId, string destination)
+    /// <exception cref="Registry.Web.Exceptions.TransientException">Another commit holds the file.</exception>
+    public async Task<StreamedFile> TakeAsync(string root, string fileId)
     {
         var folder = Folder(root, fileId);
         var status = GetStatus(root, fileId) ?? throw new NotFoundException($"Unknown upload '{fileId}'");
@@ -372,23 +392,59 @@ public sealed partial class ChunkStore
         try
         {
             // Removed (its Cancel) since its state was read
-            if (!File.Exists(Path.Combine(folder, ManifestFileName)))
+            if (!HasManifest(folder))
             {
                 DropIfRemoved(folder, upload);
                 throw new NotFoundException($"Unknown upload '{fileId}'");
             }
 
-            CatchUp(folder, status.Manifest, upload);
-            var sha256 = Convert.ToHexStringLower(upload.Hash!.GetHashAndReset());
+            var data = Path.Combine(folder, DataFileName);
+            if (!File.Exists(data))
+                throw BeingCommitted(fileId);
 
-            Directory.CreateDirectory(Path.GetDirectoryName(destination)!);
-            File.Move(Path.Combine(folder, DataFileName), destination, overwrite: true);
-            // The rename keeps the write time of the last chunk, which may be days old (a resumed upload): the sweep of
-            // abandoned temp files would take the file while its commit is moving it. It is a new file now, and the hint
-            // below (read after this) is the time it has
-            var info = new FileInfo(destination) { LastWriteTimeUtc = DateTime.UtcNow };
-            Forget(folder);
-            return new FileHashHint(sha256, info.Length, info.LastWriteTimeUtc);
+            CatchUp(folder, status.Manifest, upload);
+            // Kept: a commit made again after a failed one does not hash the file again
+            upload.Digest ??= Convert.ToHexStringLower(upload.Hash!.GetHashAndReset());
+
+            // The file keeps the write time of the last chunk, which may be days old (a resumed upload): the cleanup of
+            // abandoned uploads would take it while its commit is moving it. It is a new file now, and the hint below
+            // (read after this) is the time it has
+            File.SetLastWriteTimeUtc(data, DateTime.UtcNow);
+            var committing = Path.Combine(folder, CommittingFileName);
+            File.Move(data, committing, overwrite: true);
+            var info = new FileInfo(committing);
+            return new StreamedFile(committing, info.Length,
+                new FileHashHint(upload.Digest, info.Length, info.LastWriteTimeUtc)) { Source = new HeldFile(this, folder) };
+        }
+        finally
+        {
+            upload.Lock.Release();
+        }
+    }
+
+    /// <summary>The refusal of a commit while another commit holds the file of the upload: it passes once that one ends.</summary>
+    public static TransientException BeingCommitted(string fileId) =>
+        new($"Upload '{fileId}' is being committed; retry the request", retryAfterSeconds: 10);
+
+    // The commit that took the file of the upload in `folder` lets it go: back at its path it is the data file again,
+    // gone from it (moved into the dataset) it ends the upload. An upload removed meanwhile (its Cancel) is not made again
+    private void Release(string folder)
+    {
+        var upload = Lock(Key(folder));
+        try
+        {
+            if (!HasManifest(folder))
+            {
+                DropIfRemoved(folder, upload);
+                return;
+            }
+
+            var committing = Path.Combine(folder, CommittingFileName);
+            var data = Path.Combine(folder, DataFileName);
+            if (File.Exists(committing))
+                File.Move(committing, data, overwrite: false);
+            else if (!File.Exists(data))
+                Forget(folder);
         }
         finally
         {
@@ -465,14 +521,14 @@ public sealed partial class ChunkStore
     // the same id makes another one). Asked under the lock of `upload`.
     private bool IsLive(string folder, Upload upload) =>
         _uploads.TryGetValue(Key(folder), out var live) && ReferenceEquals(live, upload) &&
-        File.Exists(Path.Combine(folder, ManifestFileName));
+        HasManifest(folder);
 
     // The manifest, or null when there is none (never started, or removed meanwhile)
     private static ChunkManifest? TryReadManifest(string folder)
     {
         try
         {
-            return File.Exists(Path.Combine(folder, ManifestFileName)) ? ReadManifest(folder) : null;
+            return HasManifest(folder) ? ReadManifest(folder) : null;
         }
         catch (Exception ex) when (ex is FileNotFoundException or DirectoryNotFoundException)
         {
@@ -493,7 +549,7 @@ public sealed partial class ChunkStore
     // Nothing else would remove the state that a request added after the upload was removed.
     private bool DropIfRemoved(string folder, Upload upload)
     {
-        if (File.Exists(Path.Combine(folder, ManifestFileName)) ||
+        if (HasManifest(folder) ||
             !_uploads.TryRemove(new KeyValuePair<string, Upload>(Key(folder), upload)))
             return false;
         Dispose(upload);
@@ -504,16 +560,23 @@ public sealed partial class ChunkStore
     {
         upload.Hash?.Dispose();
         upload.Hash = null;
+        upload.Digest = null;
     }
 
-    // The state of `key`, locked when no one holds it; null when a request holds it. A state dropped meanwhile is no
-    // longer the upload's: the current one is tried instead, so two callers never hold two states of one upload.
-    private Upload? TryLock(string key)
+    // The state of `key`, locked when no one holds it; null when a request holds it
+    private Upload? TryLock(string key) => Acquire(key, 0);
+
+    // The state of `key`, locked (waits for the request that holds it)
+    private Upload Lock(string key) => Acquire(key, Timeout.Infinite)!;
+
+    // The state of `key`, locked within `millisecondsTimeout`, else null. A state dropped meanwhile is no longer the
+    // upload's: the current one is tried instead, so two callers never hold two states of one upload.
+    private Upload? Acquire(string key, int millisecondsTimeout)
     {
         while (true)
         {
             var upload = _uploads.GetOrAdd(key, _ => new Upload());
-            if (!upload.Lock.Wait(0))
+            if (!upload.Lock.Wait(millisecondsTimeout))
                 return null;
             if (_uploads.TryGetValue(key, out var live) && ReferenceEquals(live, upload))
                 return upload;
@@ -544,7 +607,7 @@ public sealed partial class ChunkStore
                 .Order()
                 .ToArray()
             : [];
-        return new ChunkStatus(manifest, received);
+        return new ChunkStatus(manifest, received, !File.Exists(Path.Combine(folder, DataFileName)));
     }
 
     private static ChunkManifest ReadManifest(string folder) =>

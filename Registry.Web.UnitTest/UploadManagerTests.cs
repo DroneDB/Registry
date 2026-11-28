@@ -89,8 +89,8 @@ public class UploadManagerTests
         _queue = new Mock<IDatasetIndexQueue>();
         _queue.Setup(q => q.BeginUpload(It.IsAny<DatasetKey>())).Returns(() => new TestTicket());
         _queue.Setup(q => q.EnqueueAsync(It.IsAny<DatasetKey>(), It.IsAny<IReadOnlyList<AddItem>>(),
-                It.IsAny<UploadTicket?>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync((DatasetKey _, IReadOnlyList<AddItem> items, UploadTicket? ticket, CancellationToken _) =>
+                It.IsAny<UploadTicket?>(), It.IsAny<LateIndexOutcome?>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync((DatasetKey _, IReadOnlyList<AddItem> items, UploadTicket? ticket, LateIndexOutcome? _, CancellationToken _) =>
             {
                 Interlocked.Increment(ref _enqueues);
                 ticket?.End();
@@ -116,7 +116,8 @@ public class UploadManagerTests
         protected override void OnEnded() { }
     }
 
-    private UploadManager CreateManager(IBackgroundJobsProcessor? backgroundJobs = null)
+    private UploadManager CreateManager(IBackgroundJobsProcessor? backgroundJobs = null,
+        IDatasetIndexQueue? queue = null)
     {
         var ddbManager = new Mock<IDdbManager>();
         ddbManager.Setup(m => m.Get(Org, _dataset.InternalRef)).Returns(_ddb.Object);
@@ -129,7 +130,7 @@ public class UploadManagerTests
             new DatasetAccessResolver(_utils.Object, _auth.Object, ddbManager.Object, TestPaths.Policy),
             new Registry.Adapters.FileSystem(), TestSettings.Options<ThumbnailOptions>(options), TestSettings.Options<ImportSettings>(options), TestJobs.Scheduler(jobs, buildPending, userId: "u"),
             TestUploads.Guard(new UploadQuotaLedger(TimeSpan.FromMinutes(1)), _quota.Object), _changes.Object,
-            _receipts, _queue.Object);
+            _receipts, queue ?? _queue.Object);
     }
 
     private static async Task<IReadOnlyList<StreamedPart>> Stream(UploadManager uploads,
@@ -232,8 +233,8 @@ public class UploadManagerTests
     {
         var calls = 0;
         _queue.Setup(q => q.EnqueueAsync(It.IsAny<DatasetKey>(), It.IsAny<IReadOnlyList<AddItem>>(),
-                It.IsAny<UploadTicket?>(), It.IsAny<CancellationToken>()))
-            .Returns((DatasetKey _, IReadOnlyList<AddItem> items, UploadTicket? ticket, CancellationToken _) =>
+                It.IsAny<UploadTicket?>(), It.IsAny<LateIndexOutcome?>(), It.IsAny<CancellationToken>()))
+            .Returns((DatasetKey _, IReadOnlyList<AddItem> items, UploadTicket? ticket, LateIndexOutcome? _, CancellationToken _) =>
             {
                 ticket?.End();
                 if (Interlocked.Increment(ref calls) == 1)
@@ -249,43 +250,125 @@ public class UploadManagerTests
         [new StreamedPart(path, await uploads.StreamAsync(ctx, new MemoryStream(Encoding.UTF8.GetBytes(content))),
             Overwrite: false)];
 
+    // The index queue of the dataset of the tests (deadline: one second) over a native index the test can hold
+    private (DatasetIndexQueue Queue, HeldIndex Index) RealQueue()
+    {
+        var index = new HeldIndex(_ddb);
+        var ddbManager = new Mock<IDdbManager>();
+        ddbManager.Setup(m => m.Get(Org, _dataset.InternalRef)).Returns(_ddb.Object);
+        var queue = TestIndexQueues.Create(ddbManager.Object,
+            new IndexQueueSettings { BatchWindowMs = 20, MaxBatchSize = 64, EnqueueTimeoutSeconds = 1 });
+        return (queue, index);
+    }
+
+    private Task Drained(DatasetIndexQueue queue) => queue.DrainedAsync(new DatasetKey(Org, _dataset.InternalRef));
+
+    private static async Task<UploadPartResultDto> Upload(UploadManager uploads, string path, string content,
+        string? uploadId = null, bool overwrite = false)
+    {
+        using var ctx = await uploads.BeginAsync(Org, Ds, uploadId: uploadId);
+        var file = await uploads.StreamAsync(ctx, new MemoryStream(Encoding.UTF8.GetBytes(content)));
+        return (await uploads.CommitAsync(ctx, [new StreamedPart(path, file, Overwrite: overwrite)])).Single();
+    }
+
     /// <summary>
-    /// The index write of an upload did not finish (the dataset index is locked for longer than the enqueue deadline).
-    /// The file is taken out of the dataset again: left in place, it was not in the listing and the same upload sent
-    /// once more was refused as a clash with a file nobody could see (red before: 409 on the retry).
+    /// The dataset index is locked for longer than the deadline and two native attempts: the batch takes the file at
+    /// once, the request answers 503 while that batch is still writing, and the batch fails after it. The file is
+    /// taken out of the dataset then, and its size given back: the retry, with the same upload id or a new one and
+    /// without overwrite, meets a free name (red before: the file stayed unindexed in the dataset, and the retry was
+    /// refused with 409 and its conflictPath).
     /// </summary>
     [Test]
-    public async Task AnIndexWriteThatDoesNotFinish_LeavesNoUnindexedFile_AndTheRetryIsNotAClash()
+    public async Task AnIndexWriteThatOutlastsTheDeadline_AndThenFails_LeavesNoUnindexedFile_AndTheRetryIsNotAClash(
+        [Values] bool sameUploadId)
     {
-        IndexWriteFailsOnce(() => new TransientException("Index write did not complete within 120s"));
-        var uploads = CreateManager();
+        _limit = 10;
+        var (queue, index) = RealQueue();
+        using var _ = queue;
+        var uploads = CreateManager(queue: queue);
+        var late = Path.Combine(_root, "late.txt");
+        var hold = index.HoldNext();
 
-        using (var ctx = await uploads.BeginAsync(Org, Ds))
-        {
-            var results = await uploads.CommitAsync(ctx, await StreamNew(uploads, ctx, "late.txt"));
+        (await Upload(uploads, "late.txt", "first", "late-upload-1")).Status
+            .ShouldBe(StatusCodes.Status503ServiceUnavailable);
+        hold.Started.IsCompleted.ShouldBeTrue("the batch took the file before the deadline");
+        File.Exists(late).ShouldBeTrue("the batch is still writing it");
 
-            results.Single().Status.ShouldBe(StatusCodes.Status503ServiceUnavailable);
-        }
+        hold.Busy();
+        await Drained(queue);
+
+        File.Exists(late).ShouldBeFalse();
+        index.IsIndexed("late.txt").ShouldBeFalse();
+        Directory.GetFiles(Path.Combine(_root, IDDB.UploadsFolderName), "*", SearchOption.AllDirectories)
+            .ShouldBeEmpty("neither a temp file nor a quarantined one");
+
+        var retry = await Upload(uploads, "late.txt", "second", sameUploadId ? "late-upload-1" : "late-upload-2");
+
+        retry.Status.ShouldBe(StatusCodes.Status201Created);
+        File.ReadAllText(late).ShouldBe("second");
+        index.WritesOf("late.txt").ShouldBe(1);
+    }
+
+    /// <summary>
+    /// The batch that outlasted the deadline indexes the file after all: it stays, indexed once, and keeps its size in
+    /// the quota. A retry without overwrite is then a clash with an entry the listing shows (the client offers to replace
+    /// it), as for any name that exists; with overwrite it replaces the file.
+    /// </summary>
+    [Test]
+    public async Task AnIndexWriteThatOutlastsTheDeadline_AndThenSucceeds_IndexesTheFileOnce_AndKeepsItsSize()
+    {
+        _limit = 10;
+        var (queue, index) = RealQueue();
+        using var _ = queue;
+        var uploads = CreateManager(queue: queue);
+        var hold = index.HoldNext();
+
+        (await Upload(uploads, "late.txt", "123456")).Status.ShouldBe(StatusCodes.Status503ServiceUnavailable);
+        hold.Index();
+        await Drained(queue);
+
+        File.ReadAllText(Path.Combine(_root, "late.txt")).ShouldBe("123456");
+        index.WritesOf("late.txt").ShouldBe(1);
+
+        var clash = await Upload(uploads, "late.txt", "123456");
+        clash.Status.ShouldBe(StatusCodes.Status409Conflict);
+        clash.ConflictPath.ShouldBe("late.txt");
+
+        (await Upload(uploads, "next.txt", "123456")).Status.ShouldBe(StatusCodes.Status507InsufficientStorage,
+            "the late entry counts in the quota");
+        index.WritesOf("late.txt").ShouldBe(1);
+    }
+
+    /// <summary>
+    /// The queue shuts down while a batch is writing a file: the request answers 503, and the outcome of that batch,
+    /// which ends during the shutdown, still reaches the upload: a failed write takes the file out.
+    /// </summary>
+    [Test]
+    public async Task AnIndexWriteRunningAtTheShutdown_ThatFails_LeavesNoUnindexedFile()
+    {
+        var (queue, index) = RealQueue();
+        var uploads = CreateManager(queue: queue);
+        var hold = index.HoldNext();
+
+        var upload = Upload(uploads, "late.txt", "first");
+        await hold.Started;
+        var disposed = Task.Run(queue.Dispose);
+
+        (await upload).Status.ShouldBe(StatusCodes.Status503ServiceUnavailable);
+        hold.Busy();
+        await disposed;
 
         File.Exists(Path.Combine(_root, "late.txt")).ShouldBeFalse();
-        Directory.GetFiles(Path.Combine(_root, IDDB.UploadsFolderName), "*.tmp").ShouldBeEmpty();
-
-        using (var ctx = await uploads.BeginAsync(Org, Ds))
-        {
-            var results = await uploads.CommitAsync(ctx, await StreamNew(uploads, ctx, "late.txt"));
-
-            results.Single().Status.ShouldBe(StatusCodes.Status201Created);
-        }
-
-        File.ReadAllText(Path.Combine(_root, "late.txt")).ShouldBe("new");
+        Directory.GetFiles(Path.Combine(_root, IDDB.UploadsFolderName), "*", SearchOption.AllDirectories)
+            .ShouldBeEmpty();
     }
 
     [Test]
     public async Task AFileOfABundleWhoseIndexIsBusy_IsTakenOutAndTheOthersStay()
     {
         _queue.Setup(q => q.EnqueueAsync(It.IsAny<DatasetKey>(), It.IsAny<IReadOnlyList<AddItem>>(),
-                It.IsAny<UploadTicket?>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync((DatasetKey _, IReadOnlyList<AddItem> items, UploadTicket? ticket, CancellationToken _) =>
+                It.IsAny<UploadTicket?>(), It.IsAny<LateIndexOutcome?>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync((DatasetKey _, IReadOnlyList<AddItem> items, UploadTicket? ticket, LateIndexOutcome? _, CancellationToken _) =>
             {
                 ticket?.End();
                 return items.Select(i => i.Path == "busy.txt"
@@ -328,8 +411,8 @@ public class UploadManagerTests
     public async Task AnIndexWriteStillRunningAtTheDeadline_LeavesTheFileInPlace()
     {
         _queue.Setup(q => q.EnqueueAsync(It.IsAny<DatasetKey>(), It.IsAny<IReadOnlyList<AddItem>>(),
-                It.IsAny<UploadTicket?>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync((DatasetKey _, IReadOnlyList<AddItem> items, UploadTicket? ticket, CancellationToken _) =>
+                It.IsAny<UploadTicket?>(), It.IsAny<LateIndexOutcome?>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync((DatasetKey _, IReadOnlyList<AddItem> items, UploadTicket? ticket, LateIndexOutcome? _, CancellationToken _) =>
             {
                 ticket?.End();
                 return items.Select(i => new IndexOutcome(null, new IndexWritePendingException(i.Path))).ToArray();
@@ -354,8 +437,8 @@ public class UploadManagerTests
     public async Task AnIndexWaitCanceledWithoutAnOutcome_LeavesTheFileInPlace([Values] bool thrown)
     {
         _queue.Setup(q => q.EnqueueAsync(It.IsAny<DatasetKey>(), It.IsAny<IReadOnlyList<AddItem>>(),
-                It.IsAny<UploadTicket?>(), It.IsAny<CancellationToken>()))
-            .Returns((DatasetKey _, IReadOnlyList<AddItem> items, UploadTicket? ticket, CancellationToken _) =>
+                It.IsAny<UploadTicket?>(), It.IsAny<LateIndexOutcome?>(), It.IsAny<CancellationToken>()))
+            .Returns((DatasetKey _, IReadOnlyList<AddItem> items, UploadTicket? ticket, LateIndexOutcome? _, CancellationToken _) =>
             {
                 ticket?.End();
                 if (thrown)
@@ -386,8 +469,8 @@ public class UploadManagerTests
         _limit = 10;
         var pending = true;
         _queue.Setup(q => q.EnqueueAsync(It.IsAny<DatasetKey>(), It.IsAny<IReadOnlyList<AddItem>>(),
-                It.IsAny<UploadTicket?>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync((DatasetKey _, IReadOnlyList<AddItem> items, UploadTicket? ticket, CancellationToken _) =>
+                It.IsAny<UploadTicket?>(), It.IsAny<LateIndexOutcome?>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync((DatasetKey _, IReadOnlyList<AddItem> items, UploadTicket? ticket, LateIndexOutcome? _, CancellationToken _) =>
             {
                 ticket?.End();
                 return items.Select(i => pending
@@ -419,8 +502,8 @@ public class UploadManagerTests
         var uploads = CreateManager();
         IReadOnlyList<AddItem>? seen = null;
         _queue.Setup(q => q.EnqueueAsync(It.IsAny<DatasetKey>(), It.IsAny<IReadOnlyList<AddItem>>(),
-                It.IsAny<UploadTicket?>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync((DatasetKey _, IReadOnlyList<AddItem> items, UploadTicket? _, CancellationToken _) =>
+                It.IsAny<UploadTicket?>(), It.IsAny<LateIndexOutcome?>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync((DatasetKey _, IReadOnlyList<AddItem> items, UploadTicket? _, LateIndexOutcome? _, CancellationToken _) =>
             {
                 seen = items;
                 return items.Select(i => new IndexOutcome(new Entry { Path = i.Path, Hash = "x" }, null)).ToArray();
@@ -559,8 +642,7 @@ public class UploadManagerTests
     private ChunkedUploadManager CreateChunks(UploadManager uploads)
     {
         var store = new ChunkStore();
-        return new(uploads, store, TestUploads.Guard(new UploadQuotaLedger(TimeSpan.FromMinutes(1)), _quota.Object, store),
-            TestScratch.Provider);
+        return new(uploads, store, TestUploads.Guard(new UploadQuotaLedger(TimeSpan.FromMinutes(1)), _quota.Object, store));
     }
 
     private static ChunkRequest Chunk(int index, string path = "big.bin") => new("big-file-0001", index, 3, 25, 10, path);
@@ -574,8 +656,8 @@ public class UploadManagerTests
         var chunks = CreateChunks(uploads);
         string? hinted = null;
         _queue.Setup(q => q.EnqueueAsync(It.IsAny<DatasetKey>(), It.IsAny<IReadOnlyList<AddItem>>(),
-                It.IsAny<UploadTicket?>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync((DatasetKey _, IReadOnlyList<AddItem> items, UploadTicket? _, CancellationToken _) =>
+                It.IsAny<UploadTicket?>(), It.IsAny<LateIndexOutcome?>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync((DatasetKey _, IReadOnlyList<AddItem> items, UploadTicket? _, LateIndexOutcome? _, CancellationToken _) =>
             {
                 Interlocked.Increment(ref _enqueues);
                 hinted = items[0].Hint!.Sha256;
@@ -593,6 +675,49 @@ public class UploadManagerTests
         // The client lost the response and commits again: same entry, not indexed twice
         (await chunks.CommitAsync(Org, Ds, "big-file-0001")).Path.ShouldBe("big.bin");
         _enqueues.ShouldBe(1);
+    }
+
+    /// <summary>
+    /// The index write of a chunked commit fails for a reason that passes (the index is busy): before the deadline, or
+    /// after it, once the batch that outlasted it fails. The file goes back to its upload, so the same commit made again
+    /// adds it without sending a chunk again; while the batch is still writing, a commit made again is refused as one in
+    /// progress (503), not as a clash with the file it holds (red before: the commit removed the upload, and the commit
+    /// made again was refused with 404 "Unknown upload").
+    /// </summary>
+    [Test]
+    public async Task Chunked_CommitWhoseIndexWriteFailsForAReasonThatPasses_CanBeMadeAgain(
+        [Values] bool outlastsTheDeadline)
+    {
+        var (queue, index) = RealQueue();
+        using var _ = queue;
+        var uploads = CreateManager(queue: queue);
+        var chunks = CreateChunks(uploads);
+        foreach (var i in new[] { 0, 1, 2 })
+            await chunks.WriteChunkAsync(Org, Ds, Chunk(i), Body(i));
+        var hold = index.HoldNext();
+        if (!outlastsTheDeadline)
+            hold.Busy();
+
+        var failed = await Should.ThrowAsync<TransientException>(() => chunks.CommitAsync(Org, Ds, "big-file-0001"));
+        if (outlastsTheDeadline)
+        {
+            failed.ShouldBeOfType<IndexWritePendingException>();
+            (await Should.ThrowAsync<TransientException>(() => chunks.CommitAsync(Org, Ds, "big-file-0001")))
+                .Message.ShouldContain("being committed");
+            hold.Busy();
+        }
+
+        await Drained(queue);
+        File.Exists(Path.Combine(_root, "big.bin")).ShouldBeFalse();
+        var status = await chunks.GetStatusAsync(Org, Ds, "big-file-0001");
+        status.Complete.ShouldBeTrue();
+
+        var entry = await chunks.CommitAsync(Org, Ds, "big-file-0001");
+
+        entry.Path.ShouldBe("big.bin");
+        File.ReadAllBytes(Path.Combine(_root, "big.bin")).Length.ShouldBe(25);
+        index.WritesOf("big.bin").ShouldBe(1);
+        await Should.ThrowAsync<NotFoundException>(() => chunks.GetStatusAsync(Org, Ds, "big-file-0001"));
     }
 
     [Test]

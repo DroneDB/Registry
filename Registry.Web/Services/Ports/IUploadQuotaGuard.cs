@@ -13,4 +13,11 @@ public interface IQuotaReservation : IDisposable
 
     /// <summary>The upload is stored: its bytes count as used until the next evaluation.</summary>
     void Commit();
+
+    /// <summary>
+    /// Moves <paramref name="bytes"/> of this reservation into a new one, which is committed or released on its own
+    /// (the files whose fate is known later than the others'); the total reserved does not change.
+    /// </summary>
+    /// <exception cref="System.ArgumentOutOfRangeException">More than this reservation holds, or negative.</exception>
+    IQuotaReservation Split(long bytes);
 }

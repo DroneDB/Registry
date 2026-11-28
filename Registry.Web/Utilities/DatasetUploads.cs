@@ -150,4 +150,26 @@ public static class DatasetUploads
 /// <param name="TempPath">The temporary file.</param>
 /// <param name="Bytes">Its size on disk.</param>
 /// <param name="Hash">The SHA-256 computed while it was written.</param>
-public sealed record StreamedFile(string TempPath, long Bytes, FileHashHint Hash);
+public sealed record StreamedFile(string TempPath, long Bytes, FileHashHint Hash)
+{
+    /// <summary>
+    /// The owner of the temporary file when it outlives the upload request, or null (the commit deletes what it does
+    /// not move into the dataset).
+    /// </summary>
+    public IUploadSource? Source { get; init; }
+}
+
+/// <summary>
+/// The owner of the temporary file of an upload that outlives the request: the data file of a resumable upload session,
+/// which a failed commit must leave committable. The commit never deletes such a file: one it does not move into the
+/// dataset, or takes back out of it, stays at its temporary path. Once the commit is done with the file (also after
+/// the request, when the outcome of its index write came late) it calls <see cref="Release"/>.
+/// </summary>
+public interface IUploadSource
+{
+    /// <summary>
+    /// The commit is done with the file: it is back at its temporary path (the upload can be committed again), or it
+    /// left it for good (indexed, quarantined, or kept in the dataset).
+    /// </summary>
+    void Release();
+}

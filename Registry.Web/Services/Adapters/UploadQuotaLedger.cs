@@ -68,6 +68,19 @@ public sealed class UploadQuotaLedger
             }
         }
 
+        public IQuotaReservation Split(long bytes)
+        {
+            lock (state)
+            {
+                if (_done) throw new InvalidOperationException("The reservation is already released");
+                ArgumentOutOfRangeException.ThrowIfNegative(bytes);
+                ArgumentOutOfRangeException.ThrowIfGreaterThan(bytes, Bytes);
+                // In flight already: the bytes change hands, the total of the owner stays
+                Bytes -= bytes;
+                return new Reservation(state, bytes);
+            }
+        }
+
         public void Dispose()
         {
             lock (state)

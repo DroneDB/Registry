@@ -3,7 +3,6 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
-using Registry.Ports.DroneDB;
 using Registry.Web.Exceptions;
 using Registry.Web.Services.Adapters;
 using Registry.Web.Services.Ports;
@@ -36,7 +35,8 @@ public sealed class UploadCommitter
     /// Commits <paramref name="parts"/> with one quota decision, one index batch and one invalidation: validates
     /// each file, moves it into place, indexes the batch, quarantines what failed to index, finalizes the rest and
     /// settles the receipt. A part that fails does not fail the others; a request-level failure (quota, a native
-    /// outage) is every unsettled part's outcome. Never throws.
+    /// outage) is every unsettled part's outcome. A file whose index write is still running when the wait ends stays
+    /// in place until the queue tells its outcome (<see cref="LateIndexWrites"/>). Never throws.
     /// </summary>
     public async Task<IReadOnlyList<UploadPartOutcome>> CommitAsync(UploadRequestContext ctx,
         IReadOnlyList<StreamedPart> parts)
@@ -48,6 +48,7 @@ public sealed class UploadCommitter
         var moved = new List<(int Index, MovedUploadPart Part)>();
         var sizes = new long[parts.Count];
         var settled = false;
+        LateIndexWrites? late = null;
         try
         {
             await _receipts.SetStateAsync(ctx, UploadReceiptState.Committing, null);
@@ -100,13 +101,15 @@ public sealed class UploadCommitter
                 }
             }
 
-            await _indexer.IndexAsync(ctx, moved.Select(m => m.Part).ToArray());
+            var placed = moved.Select(m => m.Part).ToArray();
+            late = new LateIndexWrites(ctx, placed, _files, _logger);
+            await _indexer.IndexAsync(ctx, placed, late.Tell);
 
             foreach (var (i, m) in moved)
             {
                 if (m.Error != null)
                 {
-                    DropUnindexed(ctx, m, m.Error);
+                    _files.DropUnindexed(ctx, m, m.Error);
                     outcomes[i] = new UploadPartOutcome(m.Part.Path, null, m.Error);
                 }
             }
@@ -114,7 +117,7 @@ public sealed class UploadCommitter
             // The quota keeps the files that stay in the dataset: the indexed ones and those whose index write is
             // still running (the batch lists them when it commits)
             settled = true;
-            SettleReservation(ctx, moved, sizes);
+            SettleReservation(ctx, moved, sizes, late);
 
             var indexed = moved.Where(m => m.Part.Entry != null).ToArray();
 
@@ -130,10 +133,10 @@ public sealed class UploadCommitter
             // unless its index write may still commit
             foreach (var (i, m) in moved)
                 if (outcomes[i] == null && m.Entry == null)
-                    DropUnindexed(ctx, m, ex);
+                    _files.DropUnindexed(ctx, m, ex);
 
             if (!settled)
-                SettleReservation(ctx, moved, sizes, ex);
+                SettleReservation(ctx, moved, sizes, late, ex);
 
             // Every file not settled shares it
             for (var i = 0; i < parts.Count; i++)
@@ -145,9 +148,12 @@ public sealed class UploadCommitter
             ctx.Ticket?.End();
 
             // A part that was never moved (validation or quota failure) leaves no temp file behind;
-            // a path outside this dataset's uploads folder is never ours to delete
-            foreach (var part in parts)
-                _files.DeleteLeftover(ctx, part.File);
+            // a path outside this dataset's uploads folder is never ours to delete. A file still waiting for its
+            // index outcome is left to that outcome
+            var awaiting = moved.Where(m => LateIndexWrites.Awaits(m.Part)).Select(m => m.Index).ToHashSet();
+            for (var i = 0; i < parts.Count; i++)
+                if (!awaiting.Contains(i))
+                    _files.DeleteLeftover(ctx, parts[i].File);
         }
 
         var results = outcomes.Select((o, i) => o ?? new UploadPartOutcome(parts[i].Path, null,
@@ -161,38 +167,29 @@ public sealed class UploadCommitter
         return results;
     }
 
-    // A file placed in the dataset that has no entry. An error that passes (the index is busy, its write did not
-    // finish in time) takes the file back out, so the retry meets a free name and the file is not left unindexed, which
-    // would be refused as a clash and counted as a replaced file by a share batch. Anything else is quarantined.
-    // A file whose index write may still commit stays: taken out, the index would list it without its file once
-    // that write commits (the reconciliation sweep indexes it when the write does not).
-    private void DropUnindexed(UploadRequestContext ctx, MovedUploadPart moved, Exception error)
-    {
-        if (OutcomeUnknown(error))
-            _logger.LogWarning(error, "'{Path}' in dataset '{OrgSlug}/{DsSlug}' may still be indexed: it stays",
-                moved.Part.Path, ctx.OrgSlug, ctx.DsSlug);
-        else if (error is TransientException or DdbBusyException)
-            _files.Withdraw(ctx, moved, error);
-        else
-            _files.Quarantine(ctx, moved.Part.Path, moved.LocalPath, error);
-    }
-
-    // Whether the index write of a file may still commit: a batch is writing it, or the wait for it was canceled
-    // without the queue saying what became of it
-    private static bool OutcomeUnknown(Exception? error) =>
-        error is IndexWritePendingException or OperationCanceledException;
-
     // The reservation becomes the size of the files that stay in the dataset (indexed, or whose index write may
-    // still commit; a file without its own error shares the request's); with none it is released when the request ends
-    private static void SettleReservation(UploadRequestContext ctx, IEnumerable<(int Index, MovedUploadPart Part)> moved,
-        long[] sizes, Exception? requestError = null)
+    // still commit; a file without its own error shares the request's); with none it is released when the request
+    // ends. The size of the files whose outcome the queue tells later moves to a reservation of their own, which
+    // keeps those that stay once it is told (LateIndexWrites)
+    private static void SettleReservation(UploadRequestContext ctx, List<(int Index, MovedUploadPart Part)> moved,
+        long[] sizes, LateIndexWrites? late, Exception? requestError = null)
     {
-        var staying = moved.Where(m => m.Part.Entry != null || OutcomeUnknown(m.Part.Error ?? requestError)).ToArray();
-        if (staying.Length == 0 || ctx.Reservation == null)
+        var awaited = new Dictionary<int, long>();
+        for (var item = 0; item < moved.Count; item++)
+            if (LateIndexWrites.Awaits(moved[item].Part))
+                awaited[item] = sizes[moved[item].Index];
+
+        var reservation = ctx.Reservation;
+        late?.Await(awaited, reservation == null || awaited.Count == 0 ? null : reservation.Split(awaited.Values.Sum()));
+
+        var staying = moved.Where(m => !LateIndexWrites.Awaits(m.Part) &&
+                                       (m.Part.Entry != null || UploadFiles.OutcomeUnknown(m.Part.Error ?? requestError)))
+            .ToArray();
+        if (staying.Length == 0 || reservation == null)
             return;
 
-        ctx.Reservation.Resize(staying.Sum(m => sizes[m.Index]));
-        ctx.Reservation.Commit();
+        reservation.Resize(staying.Sum(m => sizes[m.Index]));
+        reservation.Commit();
     }
 
     private async Task ReserveAsync(UploadRequestContext ctx, long bytes)
