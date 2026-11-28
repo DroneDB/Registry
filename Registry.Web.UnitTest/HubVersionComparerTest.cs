@@ -26,6 +26,41 @@ public class HubVersionComparerTest
         HubVersionComparer.ShouldUpgrade(onDisk, embedded).ShouldBe(expected);
     }
 
+    // The Hub changed without a version bump: the stamp carries the build too
+    [TestCase("2.7.0", "2.7.0+abc123def456", true, TestName = "Plain stamp on disk, same version with a build -> upgrade")]
+    [TestCase("2.7.0+111111111111", "2.7.0+abc123def456", true, TestName = "Same version, another build -> upgrade")]
+    [TestCase("2.7.0+abc123def456", "2.7.0+ABC123DEF456", false, TestName = "Same build in another letter case -> keep")]
+    [TestCase("2.7.0+abc123def456", "2.7.0+abc123def456", false, TestName = "Same version and build -> keep")]
+    [TestCase("2.7.0+abc123def456", "2.7.0", false, TestName = "Embedded without a build -> the version decides")]
+    [TestCase("2.7.0+abc123def456", "2.7.0+", false, TestName = "Embedded with an empty build -> the version decides")]
+    [TestCase("3.0.0+111111111111", "2.7.0+abc123def456", false, TestName = "Newer on disk with another build -> keep")]
+    [TestCase("2.7.0+abc123def456", "3.0.0+111111111111", true, TestName = "Newer version with a build -> upgrade")]
+    [TestCase("2.7.0", "3.0.0+111111111111", true, TestName = "Plain older stamp, newer version with a build -> upgrade")]
+    public void ShouldUpgrade_ComparesTheBuildOfTheSameVersion(string onDisk, string embedded, bool expected)
+    {
+        HubVersionComparer.ShouldUpgrade(onDisk, embedded).ShouldBe(expected);
+    }
+
+    [TestCase("3.0.0+abc123def456", "3.0.0")]
+    [TestCase("3.0.0-rc.1+abc123", "3.0.0-rc.1")]
+    [TestCase("3.0.0", "3.0.0")]
+    [TestCase(" 3.0.0\n", "3.0.0")]
+    [TestCase(null, null)]
+    [TestCase("  ", null)]
+    public void VersionOf_IsTheStampWithoutItsBuild(string? stamp, string? version)
+    {
+        HubVersionComparer.VersionOf(stamp).ShouldBe(version);
+    }
+
+    [TestCase("3.0.0+abc123def456", "abc123def456")]
+    [TestCase("3.0.0", null)]
+    [TestCase("3.0.0+", null)]
+    [TestCase(null, null)]
+    public void BuildOf_IsTheTextAfterThePlus(string? stamp, string? build)
+    {
+        HubVersionComparer.BuildOf(stamp).ShouldBe(build);
+    }
+
     [Test]
     public void ShouldUpgrade_EmbeddedNullOrEmpty_ReturnsFalse()
     {

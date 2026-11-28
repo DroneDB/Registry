@@ -22,6 +22,14 @@ jobs:
       with:
         path: registry
         submodules: recursive
+    # An installation that holds a Hub of the pinned version keeps it: a pin of another Hub commit needs another
+    # Hub version than the one master pins (scripts/check-hub-version.sh, also run locally). Pull requests
+    # only: a release or a push to master is compared with itself or with a master that moved on
+    - name: Hub version changes with the Hub pin
+      if: github.event_name == 'pull_request'
+      run: |
+        cd registry
+        bash scripts/check-hub-version.sh origin/master
     # Counts of patterns the backend refactor removes may only go down (build/quality-baseline.txt)
     - name: Quality metrics ratchet (no metric may grow)
       run: |
@@ -41,12 +49,13 @@ jobs:
       uses: actions/setup-node@v4
       with:
         node-version: 24
-    - name: Hub checks (tests + coverage, types, bundle budget, listener audit, ESLint)
+    - name: Hub checks (tests + coverage, types, component types, bundle budget, listener audit, ESLint)
       run: |
         cd registry/Registry.Web/ClientApp
         npm ci
         npm run test:coverage
         npm run typecheck
+        npm run typecheck:components
         npm run build:stats
         npm run check:bundle
         npm run check:listeners

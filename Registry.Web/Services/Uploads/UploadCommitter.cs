@@ -90,7 +90,7 @@ public sealed class UploadCommitter
                 var part = parts[i] with { Path = targets[i] };
                 try
                 {
-                    moved.Add((i, new MovedUploadPart(part, _files.MoveIntoDataset(ctx, part))));
+                    moved.Add((i, _files.MoveIntoDataset(ctx, part)));
                 }
                 catch (NameClashException clash)
                 {
@@ -105,11 +105,7 @@ public sealed class UploadCommitter
             {
                 if (m.Error != null)
                 {
-                    // Retryable index contention: the file on disk is healthy and was never committed
-                    // to the index; reconciliation + client retry (503 + Retry-After) is enough.
-                    // Anything else: quarantine instead of leaving an untracked file behind.
-                    if (m.Error is not TransientException and not DdbBusyException)
-                        _files.Quarantine(ctx, m.Part.Path, m.LocalPath, m.Error);
+                    DropUnindexed(ctx, m, m.Error);
                     outcomes[i] = new UploadPartOutcome(m.Part.Path, null, m.Error);
                 }
             }
@@ -128,7 +124,13 @@ public sealed class UploadCommitter
         }
         catch (Exception ex)
         {
-            // Request-level failure (quota, a native outage): every file not settled shares it
+            // Request-level failure (quota, a native outage, an index write that did not finish): a file already
+            // moved into the dataset that has no entry must not stay as an unindexed file that blocks the retry
+            foreach (var (i, m) in moved)
+                if (outcomes[i] == null && m.Entry == null)
+                    DropUnindexed(ctx, m, ex);
+
+            // Every file not settled shares it
             for (var i = 0; i < parts.Count; i++)
                 outcomes[i] ??= new UploadPartOutcome(parts[i].Path, null, ex);
         }
@@ -152,6 +154,17 @@ public sealed class UploadCommitter
         else
             await _receipts.SetStateAsync(ctx, UploadReceiptState.Done, dtos);
         return results;
+    }
+
+    // A file placed in the dataset that has no entry. An error that passes (the index is busy, its write did not
+    // finish in time) takes the file back out, so the retry meets a free name and the file is not left unindexed, which
+    // would be refused as a clash and counted as a replaced file by a share batch. Anything else is quarantined.
+    private void DropUnindexed(UploadRequestContext ctx, MovedUploadPart moved, Exception error)
+    {
+        if (error is TransientException or DdbBusyException)
+            _files.Withdraw(ctx, moved, error);
+        else
+            _files.Quarantine(ctx, moved.Part.Path, moved.LocalPath, error);
     }
 
     private async Task ReserveAsync(UploadRequestContext ctx, long bytes)

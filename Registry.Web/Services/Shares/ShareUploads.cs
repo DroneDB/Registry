@@ -47,14 +47,16 @@ public sealed class ShareUploads
     /// <summary>
     /// Where a file of a share batch sent to <paramref name="path"/> is written, as the upload commit resolves it: the
     /// dataset path rule (<see cref="DatasetPathPolicy.Normalize"/>, a backslash is a '/'), then the letter case of the
-    /// entry that holds the name (D-040, <see cref="DatasetEntryLookup.Locate"/>). <c>Replaced</c>: something held the
-    /// name before the upload (a rollback of the batch keeps it, FR-XC-27).
+    /// entry that holds the name (D-040, <see cref="DatasetEntryLookup.Locate"/>). <c>Replaced</c>: an indexed entry held
+    /// the name before the upload (a rollback of the batch keeps it, FR-XC-27). A file on disk that the index does not
+    /// list (what an upload left when its index write did not finish) is nobody's entry: the batch owns what it writes
+    /// there, and a rollback removes it.
     /// </summary>
     /// <exception cref="Registry.Web.Exceptions.InvalidDatasetPathException">Not a dataset path (400).</exception>
     internal static (string Path, bool Replaced) Target(DatasetPathPolicy paths, IDDB ddb, string path)
     {
         var location = DatasetEntryLookup.Locate(ddb, paths.Normalize(path));
-        return (location.Path, location.Existing != null);
+        return (location.Path, location.Existing != null && ddb.EntryExists(location.Path));
     }
 
     /// <summary>

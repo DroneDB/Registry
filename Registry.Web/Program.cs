@@ -555,13 +555,14 @@ public class Program
 
         // Record the version that is actually on disk so /sys/features can
         // expose it to the SPA for client-side update detection.
-        Services.Hub.HubInfo.Initialize(ReadOnDiskHubVersion(hubRoot) ?? embeddedVersion);
+        // (the version only: the client compares it with its own, the stamp's build is not part of it)
+        Services.Hub.HubInfo.Initialize(Services.Hub.HubVersionComparer.VersionOf(ReadOnDiskHubVersion(hubRoot) ?? embeddedVersion));
 
         return ok;
     }
 
     /// <summary>
-    /// Reads the Hub version stamped inside the embedded ClientApp.zip.
+    /// Reads the Hub stamp (version and build) inside the embedded ClientApp.zip.
     /// Returns <c>null</c> if the marker file is missing (older ZIPs).
     /// </summary>
     private static string? ReadEmbeddedHubVersion()

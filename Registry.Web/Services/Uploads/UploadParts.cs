@@ -31,10 +31,13 @@ public sealed record UploadPartOutcome(string Path, EntryDto? Entry, Exception? 
 }
 
 /// <summary>A file moved into the dataset and waiting for (or past) its index step.</summary>
-public sealed class MovedUploadPart(StreamedPart part, string localPath)
+public sealed class MovedUploadPart(StreamedPart part, string localPath, bool replacedFile = false)
 {
     public StreamedPart Part { get; } = part;
     public string LocalPath { get; } = localPath;
+
+    /// <summary>Whether the move overwrote a file that held the path: the old content is gone, so the file cannot be withdrawn.</summary>
+    public bool ReplacedFile { get; } = replacedFile;
     public Entry? Entry { get; set; }
     public Exception? Error { get; set; }
 }

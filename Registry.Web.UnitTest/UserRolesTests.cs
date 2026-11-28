@@ -515,6 +515,47 @@ public class UserRolesTests
     }
 
     #endregion
+    #region Delete of a user of the local provider
+
+    // The checks come before any data is touched: the registry context is not needed (and is null here)
+    private Task<DeleteUserResultDto> DeleteLocalUser(string userName, string? successor = null)
+    {
+        _login.Setup(l => l.Capabilities).Returns(AuthProviderCapabilities.Local);
+        var deletion = new UserDeletion(_login.Object, _users, _roles, new Mock<IOrganizationsManager>().Object, null!,
+            MsOptions.Create(new IdentityProviderOptions { DefaultAdmin = new AdminInfo { UserName = "admin" } }),
+            NullLogger<UserDeletion>.Instance);
+        return deletion.DeleteUser(userName, successor);
+    }
+
+    [TestCase(null)]
+    [TestCase("boss")]
+    public async Task DeleteUser_Local_YourOwnAccount_Is403(string? successor)
+    {
+        await CreateUser("jane", Admin);
+        CallerIs("jane");
+
+        var ex = await Should.ThrowAsync<ForbiddenException>(() => DeleteLocalUser("jane", successor));
+
+        ex.Message.ShouldBe("You cannot delete your own account");
+        (await _users.FindByNameAsync("jane")).ShouldNotBeNull();
+    }
+
+    [TestCase(null)]
+    [TestCase("operator")]
+    public async Task DeleteUser_Local_TheLastActiveAdmin_Is403(string? successor)
+    {
+        // A caller whose token still says admin, though the role was taken away from it
+        await CreateUser("operator");
+        await CreateUser("other", Admin, Deactivated);
+        CallerIs("operator");
+
+        var ex = await Should.ThrowAsync<ForbiddenException>(() => DeleteLocalUser("boss", successor));
+
+        ex.Message.ShouldBe("Cannot delete the last active administrator");
+        (await _users.FindByNameAsync("boss")).ShouldNotBeNull();
+    }
+
+    #endregion
 
     #region Other role lists (D-043: only disable adds 'deactivated')
 

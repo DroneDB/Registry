@@ -196,9 +196,12 @@
         <Delete Files="$(ProjectDir)/ClientApp.zip" />
 
         <!--
-          Stamp the Hub semantic version (read from ClientApp/package.json) into the build
-          output so it ends up inside ClientApp.zip. Registry uses this marker to decide
-          whether the on-disk Hub needs to be re-extracted after an upgrade.
+          Stamp the Hub semantic version (read from ClientApp/package.json) and a hash of the build (the
+          SHA-256 of its index.html, which names every hashed chunk, so any change of the Hub changes it)
+          into the build output, "version+hash", so it ends up inside ClientApp.zip. Registry uses this
+          marker to decide whether the on-disk Hub needs to be re-extracted: a newer version, or the same
+          version of another build (a Hub that changed without a version bump). Only the part before "+"
+          is the Hub version the client compares with its own.
         -->
         <PropertyGroup>
             <HubPackageJsonPath>$(ProjectDir)/ClientApp/package.json</HubPackageJsonPath>
@@ -212,11 +215,19 @@
             Condition="'$(HubVersion)' == ''"
             Text="Failed to extract a 'version' field from '$(HubPackageJsonPath)'. Cannot stamp Hub version into ClientApp.zip." />
 
-        <Message Text="Stamping Hub version $(HubVersion) into ClientApp.zip" Importance="high" />
+        <GetFileHash Condition="Exists('$(ProjectDir)/ClientApp/build/index.html')" Files="$(ProjectDir)/ClientApp/build/index.html" Algorithm="SHA256">
+            <Output TaskParameter="Hash" PropertyName="HubIndexHash" />
+        </GetFileHash>
+        <PropertyGroup>
+            <HubStamp>$(HubVersion)</HubStamp>
+            <HubStamp Condition="'$(HubIndexHash)' != ''">$(HubVersion)+$(HubIndexHash.Substring(0, 12).ToLowerInvariant())</HubStamp>
+        </PropertyGroup>
+
+        <Message Text="Stamping Hub $(HubStamp) into ClientApp.zip" Importance="high" />
 
         <WriteLinesToFile
             File="$(ProjectDir)/ClientApp/build/version.txt"
-            Lines="$(HubVersion)"
+            Lines="$(HubStamp)"
             Overwrite="true" />
 
         <ZipDirectory SourceDirectory="$(ProjectDir)/ClientApp/build" DestinationFile="$(ProjectDir)/ClientApp.zip" Overwrite="true" />

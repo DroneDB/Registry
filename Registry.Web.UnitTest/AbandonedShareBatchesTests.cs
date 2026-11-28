@@ -415,6 +415,28 @@ public class AbandonedShareBatchesTests
         _context.Batches.AsNoTracking().Single(b => b.Token == token).LastActivity.ShouldBe(_time.Now);
     }
 
+    /// <summary>
+    /// A file on disk that the index does not list (what an upload leaves when its index write did not finish) is
+    /// nobody's entry: the batch that writes there owns the file, so its rollback removes it (red before: it was
+    /// recorded as replaced, and the rollback kept the file and the dataset).
+    /// </summary>
+    [Test]
+    public async Task AShareUpload_OverAFileTheIndexDoesNotList_DoesNotRecordItAsReplaced()
+    {
+        var ds = AddDataset("unindexed");
+        var local = Local(ds, "orphan.jpg");
+        File.WriteAllText(local, "left over");
+        var token = AddBatch(ds, TimeSpan.Zero, createdDataset: false);
+        var uploads = new ShareUploads(Store(), Objects(ds).Object, new FileSystem(), DdbManager(), TestPaths.Policy,
+            NullLogger<ShareUploads>.Instance);
+        var temp = new StreamedFile(Path.Combine(_root, "missing.tmp"), 1, new FileHashHint("h", 1, _time.Now));
+
+        await uploads.UploadStreamed(token, "orphan.jpg", temp);
+
+        _context.ChangeTracker.Clear();
+        _context.Set<Entry>().AsNoTracking().Single().Replaced.ShouldBeFalse();
+    }
+
     [Test]
     public async Task ACloseOfABatchThatEndedMeanwhile_IsRefused_AndKeepsTheFirstEnd()
     {

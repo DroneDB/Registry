@@ -82,6 +82,10 @@ public sealed class UserDeletion
             return new DeleteUserResultDto { UserName = userName, DatasetResults = [] };
         }
 
+        // The deletion of the Users list refuses what its disable refuses (the external branch above answers it as
+        // its disable does): your own account, and the last active administrator, with or without a successor
+        await _roles.EnsureDeletable(user);
+
         // Validate successor if specified
         User? successorUser = null;
         if (!string.IsNullOrWhiteSpace(successor))

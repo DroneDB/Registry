@@ -228,6 +228,97 @@ public class UploadManagerTests
         Directory.GetFiles(Path.Combine(_root, IDDB.UploadsFolderName), "*.tmp").ShouldBeEmpty();
     }
 
+    private void IndexWriteFailsOnce(Func<Exception> failure)
+    {
+        var calls = 0;
+        _queue.Setup(q => q.EnqueueAsync(It.IsAny<DatasetKey>(), It.IsAny<IReadOnlyList<AddItem>>(),
+                It.IsAny<UploadTicket?>(), It.IsAny<CancellationToken>()))
+            .Returns((DatasetKey _, IReadOnlyList<AddItem> items, UploadTicket? ticket, CancellationToken _) =>
+            {
+                ticket?.End();
+                if (Interlocked.Increment(ref calls) == 1)
+                    throw failure();
+                return Task.FromResult<IReadOnlyList<IndexOutcome>>([.. items.Select(i =>
+                    new IndexOutcome(new Entry { Path = i.Path, Hash = i.Hint?.Sha256, Type = EntryType.Generic }, null))]);
+            });
+    }
+
+    // A request that adds a file without replacing one (what POST /obj does without the overwrite field)
+    private static async Task<IReadOnlyList<StreamedPart>> StreamNew(UploadManager uploads,
+        Services.Uploads.UploadRequestContext ctx, string path, string content = "new") =>
+        [new StreamedPart(path, await uploads.StreamAsync(ctx, new MemoryStream(Encoding.UTF8.GetBytes(content))),
+            Overwrite: false)];
+
+    /// <summary>
+    /// The index write of an upload did not finish (the dataset index is locked for longer than the enqueue deadline).
+    /// The file is taken out of the dataset again: left in place, it was not in the listing and the same upload sent
+    /// once more was refused as a clash with a file nobody could see (red before: 409 on the retry).
+    /// </summary>
+    [Test]
+    public async Task AnIndexWriteThatDoesNotFinish_LeavesNoUnindexedFile_AndTheRetryIsNotAClash()
+    {
+        IndexWriteFailsOnce(() => new TransientException("Index write did not complete within 120s"));
+        var uploads = CreateManager();
+
+        using (var ctx = await uploads.BeginAsync(Org, Ds))
+        {
+            var results = await uploads.CommitAsync(ctx, await StreamNew(uploads, ctx, "late.txt"));
+
+            results.Single().Status.ShouldBe(StatusCodes.Status503ServiceUnavailable);
+        }
+
+        File.Exists(Path.Combine(_root, "late.txt")).ShouldBeFalse();
+        Directory.GetFiles(Path.Combine(_root, IDDB.UploadsFolderName), "*.tmp").ShouldBeEmpty();
+
+        using (var ctx = await uploads.BeginAsync(Org, Ds))
+        {
+            var results = await uploads.CommitAsync(ctx, await StreamNew(uploads, ctx, "late.txt"));
+
+            results.Single().Status.ShouldBe(StatusCodes.Status201Created);
+        }
+
+        File.ReadAllText(Path.Combine(_root, "late.txt")).ShouldBe("new");
+    }
+
+    [Test]
+    public async Task AFileOfABundleWhoseIndexIsBusy_IsTakenOutAndTheOthersStay()
+    {
+        _queue.Setup(q => q.EnqueueAsync(It.IsAny<DatasetKey>(), It.IsAny<IReadOnlyList<AddItem>>(),
+                It.IsAny<UploadTicket?>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync((DatasetKey _, IReadOnlyList<AddItem> items, UploadTicket? ticket, CancellationToken _) =>
+            {
+                ticket?.End();
+                return items.Select(i => i.Path == "busy.txt"
+                    ? new IndexOutcome(null, new DdbBusyException("busy"))
+                    : new IndexOutcome(new Entry { Path = i.Path, Hash = i.Hint?.Sha256, Type = EntryType.Generic }, null)).ToArray();
+            });
+        var uploads = CreateManager();
+        using var ctx = await uploads.BeginAsync(Org, Ds);
+
+        var results = await uploads.CommitAsync(ctx, await Stream(uploads, ctx, "ok.txt", "busy.txt"));
+
+        results[0].Status.ShouldBe(StatusCodes.Status201Created);
+        results[1].Status.ShouldBe(StatusCodes.Status503ServiceUnavailable);
+        File.Exists(Path.Combine(_root, "ok.txt")).ShouldBeTrue();
+        File.Exists(Path.Combine(_root, "busy.txt")).ShouldBeFalse();
+    }
+
+    /// <summary>A file that replaced another one cannot be taken out: the old content is gone and its name is still indexed.</summary>
+    [Test]
+    public async Task AnIndexWriteThatDoesNotFinish_KeepsAFileThatReplacedAnother()
+    {
+        File.WriteAllText(Path.Combine(_root, "doc.txt"), "old");
+        IndexWriteFailsOnce(() => new TransientException("Index write did not complete within 120s"));
+        var uploads = CreateManager();
+        using var ctx = await uploads.BeginAsync(Org, Ds);
+        var file = await uploads.StreamAsync(ctx, new MemoryStream(Encoding.UTF8.GetBytes("new")));
+
+        var results = await uploads.CommitAsync(ctx, [new StreamedPart("doc.txt", file, Overwrite: true)]);
+
+        results.Single().Status.ShouldBe(StatusCodes.Status503ServiceUnavailable);
+        File.ReadAllText(Path.Combine(_root, "doc.txt")).ShouldBe("new");
+    }
+
     [Test]
     public async Task HashComputedWhileStreaming_IsTheIndexHint()
     {

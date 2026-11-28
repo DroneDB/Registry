@@ -108,12 +108,13 @@ public sealed class UploadFiles
     /// written since its name was checked.
     /// </summary>
     /// <exception cref="NameClashException">The part does not overwrite and a file holds its path.</exception>
-    public string MoveIntoDataset(UploadRequestContext ctx, StreamedPart part)
+    public MovedUploadPart MoveIntoDataset(UploadRequestContext ctx, StreamedPart part)
     {
         var localFilePath = ctx.Ddb.GetLocalPath(part.Path);
         _fs.EnsureParentFolderExists(localFilePath);
 
-        if (!part.Overwrite && _fs.Exists(localFilePath))
+        var replaced = _fs.Exists(localFilePath);
+        if (!part.Overwrite && replaced)
             throw new NameClashException(part.Path);
 
         try
@@ -127,7 +128,39 @@ public sealed class UploadFiles
             throw new NameClashException(part.Path);
         }
 
-        return localFilePath;
+        return new MovedUploadPart(part, localFilePath, replaced);
+    }
+
+    /// <summary>
+    /// Takes back a file that was placed in the dataset and could not be indexed for a reason that passes (the index is
+    /// busy, or its write did not finish in time): the file goes back to the temporary path it was streamed to, which
+    /// the commit deletes, so the name is free again and the same upload sent once more is not refused as a clash with
+    /// a file the dataset does not list. A file that replaced another one stays: the old content is gone, and the index
+    /// still lists its name. Never throws: a file that cannot be moved back is quarantined.
+    /// </summary>
+    public void Withdraw(UploadRequestContext ctx, MovedUploadPart moved, Exception cause)
+    {
+        if (moved.ReplacedFile)
+        {
+            _logger.LogWarning(cause, "'{Path}' in dataset '{OrgSlug}/{DsSlug}' replaced a file and was not indexed: it stays",
+                moved.Part.Path, ctx.OrgSlug, ctx.DsSlug);
+            return;
+        }
+
+        BestEffort.Run(() =>
+        {
+            if (!_fs.Exists(moved.LocalPath))
+                return;
+
+            _fs.Move(moved.LocalPath, moved.Part.File.TempPath, overwrite: true);
+            _logger.LogWarning(cause, "'{Path}' in dataset '{OrgSlug}/{DsSlug}' was not indexed in time: the upload is withdrawn",
+                moved.Part.Path, ctx.OrgSlug, ctx.DsSlug);
+        }, ex =>
+        {
+            _logger.LogError(ex, "Cannot withdraw '{Path}' in dataset '{OrgSlug}/{DsSlug}'", moved.Part.Path,
+                ctx.OrgSlug, ctx.DsSlug);
+            Quarantine(ctx, moved.Part.Path, moved.LocalPath, cause);
+        });
     }
 
     /// <summary>

@@ -234,6 +234,21 @@ public sealed class UserRoles
                ?? throw new NotFoundException($"User '{userName}' does not exist");
     }
 
+    /// <summary>
+    /// The rules of deleting an account, the counterpart of those of <see cref="DisableUser"/>: not the caller's own
+    /// account, and not the last active administrator, with or without a successor for the data: an account deleted
+    /// that way leaves nobody who can sign in as an administrator.
+    /// </summary>
+    /// <exception cref="ForbiddenException">The user is the caller, or the last active administrator.</exception>
+    public async Task EnsureDeletable(User user)
+    {
+        if (user.Id == await _authManager.GetCurrentUserId())
+            throw new ForbiddenException("You cannot delete your own account");
+
+        if (await IsLastActiveAdmin(user))
+            throw new ForbiddenException("Cannot delete the last active administrator");
+    }
+
     // An active administrator that no other active administrator backs up
     private async Task<bool> IsLastActiveAdmin(User user)
     {
