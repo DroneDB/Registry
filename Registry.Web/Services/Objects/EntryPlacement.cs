@@ -28,8 +28,8 @@ internal sealed class EntryPlacement(IFileSystem fs, ILogger logger)
     /// <summary>
     /// Copies <paramref name="sourceLocalPath"/> to <paramref name="destPath"/> of <paramref name="destDdb"/> and
     /// promotes it, after moving <paramref name="replaced"/> (the entry the destination holds, when the request
-    /// replaces one) to the trash and forgetting it in the index. Index the copy next, then <see cref="Commit"/>
-    /// or <see cref="Rollback"/>.
+    /// replaces one) to the trash and forgetting it in the index. Index the copy next (after
+    /// <see cref="BeginIndexing"/>), then <see cref="Commit"/> or <see cref="Rollback"/>.
     /// </summary>
     /// <exception cref="System.IO.IOException">The destination appeared meanwhile: nothing of it is replaced.</exception>
     public void Place(IDDB destDdb, string destPath, Entry? replaced, string sourceLocalPath, bool isFolder)
@@ -68,8 +68,11 @@ internal sealed class EntryPlacement(IFileSystem fs, ILogger logger)
         _promoted = true;
     }
 
-    /// <summary>The promoted copy is in the index: a rollback forgets it.</summary>
-    public void MarkIndexed() => _indexed = true;
+    /// <summary>
+    /// The promoted copy is about to be indexed: from now on a rollback forgets whatever of it the index holds, also
+    /// when the indexing itself fails half way (a folder whose files are listed and whose last add throws).
+    /// </summary>
+    public void BeginIndexing() => _indexed = true;
 
     /// <summary>The previous destination is not needed any more (the new one is in place): its trash is deleted.</summary>
     public void Commit()
@@ -84,8 +87,13 @@ internal sealed class EntryPlacement(IFileSystem fs, ILogger logger)
         if (_ddb == null)
             return;
 
+        // Only what the index holds: the indexing may have failed before it listed anything
         if (_indexed)
-            Undo("DDB add", () => _ddb.Remove(_path));
+            Undo("DDB add", () =>
+            {
+                if (_ddb.EntryExists(_path))
+                    _ddb.Remove(_path);
+            });
 
         // A partially promoted destination goes before the trash is put back
         if (_promoted)

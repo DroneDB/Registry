@@ -319,6 +319,32 @@ public class UploadManagerTests
         File.ReadAllText(Path.Combine(_root, "doc.txt")).ShouldBe("new");
     }
 
+    /// <summary>
+    /// The deadline passed while a batch was still writing the file to the index: the file stays where it is, since
+    /// that batch lists it when it commits (red before: the file was taken out and the index then held an entry
+    /// without its file).
+    /// </summary>
+    [Test]
+    public async Task AnIndexWriteStillRunningAtTheDeadline_LeavesTheFileInPlace()
+    {
+        _queue.Setup(q => q.EnqueueAsync(It.IsAny<DatasetKey>(), It.IsAny<IReadOnlyList<AddItem>>(),
+                It.IsAny<UploadTicket?>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync((DatasetKey _, IReadOnlyList<AddItem> items, UploadTicket? ticket, CancellationToken _) =>
+            {
+                ticket?.End();
+                return items.Select(i => new IndexOutcome(null, new IndexWritePendingException(i.Path))).ToArray();
+            });
+        var uploads = CreateManager();
+        using var ctx = await uploads.BeginAsync(Org, Ds);
+
+        var results = await uploads.CommitAsync(ctx, await StreamNew(uploads, ctx, "slow.txt"));
+
+        results.Single().Status.ShouldBe(StatusCodes.Status503ServiceUnavailable);
+        File.ReadAllText(Path.Combine(_root, "slow.txt")).ShouldBe("new");
+        Directory.EnumerateFiles(_root, "*", SearchOption.AllDirectories)
+            .Count(f => Path.GetFileName(f) == "slow.txt").ShouldBe(1, "neither withdrawn nor quarantined");
+    }
+
     [Test]
     public async Task HashComputedWhileStreaming_IsTheIndexHint()
     {

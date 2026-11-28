@@ -358,6 +358,66 @@ public class ObjectsManagerCopyTransferTest : TestBase
         _otherDdbMock.Verify(x => x.AddRaw(destPath), Times.Once);
     }
 
+    /// <summary>
+    /// A move whose source file cannot be deleted once the source is out of its index (a locked or read-only file):
+    /// the transfer is complete, the destination stays whole and indexed and the request succeeds; the file left
+    /// behind is only logged (red before: the rollback deleted the destination too, while the source index entry
+    /// was already gone and its files partly deleted).
+    /// </summary>
+    [Test]
+    public async Task Transfer_WhoseSourceFileCannotBeDeleted_KeepsTheDestinationWholeAndIndexed()
+    {
+        const string path = "src.jpg";
+        var sourceFile = Path.Combine(DatasetFolder, path);
+        var destFile = Path.Combine(OtherDatasetFolder, path);
+
+        _ddbMock.Setup(x => x.GetEntry(path))
+            .Returns(new Entry { Path = path, Type = EntryType.Generic, Size = 10, Hash = "hh" });
+        _otherDdbMock.Setup(x => x.GetEntry(path)).Returns((Entry?)null);
+        _otherDdbMock.Setup(x => x.EntryExists(path)).Returns(true);
+        _fsMock.Setup(x => x.Exists(It.IsAny<string>())).Returns(true);
+        _fsMock.Setup(x => x.FolderExists(It.IsAny<string>())).Returns(false);
+        _fsMock.Setup(x => x.Delete(sourceFile)).Throws(new IOException("The file is locked"));
+
+        await CreateManager().TransferAsync(OrgSlug, DsSlug, path, OrgSlug, OtherDsSlug,
+            destPath: path, overwrite: false, keepSource: false);
+
+        _ddbMock.Verify(x => x.Remove(path), Times.Once);
+        _fsMock.Verify(x => x.Delete(sourceFile), Times.Once);
+        _otherDdbMock.Verify(x => x.AddRaw(path), Times.Once);
+        _otherDdbMock.Verify(x => x.Remove(It.IsAny<string>()), Times.Never);
+        _fsMock.Verify(x => x.Delete(destFile), Times.Never);
+    }
+
+    /// <summary>
+    /// The copy of a folder whose files are indexed in one batch and whose folder add then fails: the rollback
+    /// removes what the index lists of the copy before it deletes its files (red before: the index kept the rows of
+    /// files the rollback had deleted, because the copy counted as indexed only once the whole indexing returned).
+    /// </summary>
+    [Test]
+    public async Task Copy_OfAFolderWhoseLastAddFails_RemovesWhatTheIndexListsOfTheCopy()
+    {
+        var modified = new DateTime(2026, 1, 2, 3, 4, 5, DateTimeKind.Utc);
+        _ddbMock.Setup(x => x.GetEntry("dir")).Returns(new Entry { Path = "dir", Type = EntryType.Directory });
+        _ddbMock.Setup(x => x.GetEntry("copy")).Returns((Entry?)null);
+        _ddbMock.Setup(x => x.FindSummaries(It.IsAny<EntryQuery>())).Returns(
+            [new EntrySummary { Path = "dir/a.jpg", Type = EntryType.Generic, Hash = "ha", Size = 10, ModifiedTime = modified }]);
+        _fsMock.Setup(x => x.Exists(It.IsAny<string>())).Returns(true);
+        _fsMock.Setup(x => x.FolderExists(It.IsAny<string>())).Returns(false);
+        _fsMock.Setup(x => x.GetFileSize(It.IsAny<string>())).Returns(10);
+        _fsMock.Setup(x => x.GetLastWriteTime(It.IsAny<string>())).Returns(modified);
+        _ddbMock.Setup(x => x.AddRawBatchWithOptions(It.IsAny<IReadOnlyList<AddItem>>(), true))
+            .Returns(new BatchAddResult());
+        _ddbMock.Setup(x => x.AddRaw("copy")).Throws(new DdbException("Cannot add the folder"));
+        _ddbMock.Setup(x => x.EntryExists("copy")).Returns(true);
+
+        await Should.ThrowAsync<DdbException>(() => CreateManager().CopyAsync(OrgSlug, DsSlug, "dir", "copy"));
+
+        _ddbMock.Verify(x => x.AddRawBatchWithOptions(
+            It.Is<IReadOnlyList<AddItem>>(items => items.Single().Path == "copy/a.jpg"), true), Times.Once);
+        _ddbMock.Verify(x => x.Remove("copy"), Times.Once);
+    }
+
     // The caller reads the source dataset (a public one, say) and writes the destination, nothing more
     private void ReadOnlySource()
     {

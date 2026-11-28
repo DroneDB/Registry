@@ -9,6 +9,7 @@ using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Logging.Abstractions;
 using Moq;
 using NUnit.Framework;
+using Registry.Web.Data;
 using Registry.Web.Exceptions;
 using Registry.Web.Identity;
 using Registry.Web.Identity.Models;
@@ -53,10 +54,7 @@ public class UserRolesTests
         _db = TestDb.Create<ApplicationDbContext>();
         var context = _db.NewContext();
         _snapshots = new UserAuthSnapshotCache(new MemoryCache(new MemoryCacheOptions()), TimeSpan.FromMinutes(5));
-        _users = new HookedUserManager(new UserStore<User, IdentityRole, ApplicationDbContext>(context),
-            MsOptions.Create(new IdentityOptions()), new PasswordHasher<User>(), [], [],
-            new UpperInvariantLookupNormalizer(), new IdentityErrorDescriber(), null!,
-            NullLogger<UserManager<User>>.Instance, _snapshots);
+        _users = NewUserManager(context);
         _roleManager = new RoleManager<IdentityRole>(new RoleStore<IdentityRole>(context), [],
             new UpperInvariantLookupNormalizer(), new IdentityErrorDescriber(), NullLogger<RoleManager<IdentityRole>>.Instance);
 
@@ -79,6 +77,12 @@ public class UserRolesTests
         await CreateUser("boss", Admin);
         CallerIs("boss");
     }
+
+    private HookedUserManager NewUserManager(ApplicationDbContext context) =>
+        new(new UserStore<User, IdentityRole, ApplicationDbContext>(context),
+            MsOptions.Create(new IdentityOptions()), new PasswordHasher<User>(), [], [],
+            new UpperInvariantLookupNormalizer(), new IdentityErrorDescriber(), null!,
+            NullLogger<UserManager<User>>.Instance, _snapshots);
 
     [TearDown]
     public void TearDown()
@@ -471,13 +475,13 @@ public class UserRolesTests
     #region Delete of a user of an external provider (a deactivation)
 
     /// <summary>The delete of a user of an external provider: the user is deactivated, not deleted</summary>
-    private Task<DeleteUserResultDto> DeleteExternalUser(string userName)
+    private Task<DeleteUserResultDto> DeleteExternalUser(string userName, string? successor = null)
     {
         _login.Setup(l => l.Capabilities).Returns(AuthProviderCapabilities.External);
         var deletion = new UserDeletion(_login.Object, _users, _roles, new Mock<IOrganizationsManager>().Object, null!,
             MsOptions.Create(new IdentityProviderOptions { DefaultAdmin = new AdminInfo { UserName = "admin" } }),
             NullLogger<UserDeletion>.Instance);
-        return deletion.DeleteUser(userName);
+        return deletion.DeleteUser(userName, successor);
     }
 
     [Test]
@@ -490,38 +494,56 @@ public class UserRolesTests
         (await RolesOf("jane")).ShouldBe([Deactivated, "editor"]);
     }
 
-    [Test]
-    public async Task DeleteUser_External_YourOwnAccount_Is400()
+    /// <summary>
+    /// The rules of deleting an account answer as they do for the local provider, before the successor is looked at
+    /// (red before: 400 with the message of the disable, or the 400 of the successor that is not supported).
+    /// </summary>
+    [TestCase(null)]
+    [TestCase("boss")]
+    public async Task DeleteUser_External_YourOwnAccount_Is403(string? successor)
     {
         await CreateUser("jane", Admin);
         CallerIs("jane");
 
-        var ex = await Should.ThrowAsync<BadRequestException>(() => DeleteExternalUser("jane"));
+        var ex = await Should.ThrowAsync<ForbiddenException>(() => DeleteExternalUser("jane", successor));
 
-        ex.Message.ShouldContain("your own account");
+        ex.Message.ShouldBe("You cannot delete your own account");
         (await RolesOf("jane")).ShouldBe([Admin]);
     }
 
-    [Test]
-    public async Task DeleteUser_External_TheLastActiveAdmin_Is400()
+    [TestCase(null)]
+    [TestCase("operator")]
+    public async Task DeleteUser_External_TheLastActiveAdmin_Is403(string? successor)
     {
         await CreateUser("operator");
         CallerIs("operator");
 
-        var ex = await Should.ThrowAsync<BadRequestException>(() => DeleteExternalUser("boss"));
+        var ex = await Should.ThrowAsync<ForbiddenException>(() => DeleteExternalUser("boss", successor));
 
-        ex.Message.ShouldContain("last active administrator");
+        ex.Message.ShouldBe("Cannot delete the last active administrator");
         (await RolesOf("boss")).ShouldBe([Admin]);
+    }
+
+    [Test]
+    public async Task DeleteUser_External_WithASuccessor_IsStill400_ForAUserItMayDelete()
+    {
+        await CreateUser("jane", "editor");
+
+        var ex = await Should.ThrowAsync<BadRequestException>(() => DeleteExternalUser("jane", "boss"));
+
+        ex.Message.ShouldContain("successor");
+        (await RolesOf("jane")).ShouldBe(["editor"]);
     }
 
     #endregion
     #region Delete of a user of the local provider
 
-    // The checks come before any data is touched: the registry context is not needed (and is null here)
-    private Task<DeleteUserResultDto> DeleteLocalUser(string userName, string? successor = null)
+    // The checks come before any data is touched: the registry context is not needed (null) unless the deletion runs
+    private Task<DeleteUserResultDto> DeleteLocalUser(string userName, string? successor = null,
+        RegistryContext? registry = null)
     {
         _login.Setup(l => l.Capabilities).Returns(AuthProviderCapabilities.Local);
-        var deletion = new UserDeletion(_login.Object, _users, _roles, new Mock<IOrganizationsManager>().Object, null!,
+        var deletion = new UserDeletion(_login.Object, _users, _roles, new Mock<IOrganizationsManager>().Object, registry!,
             MsOptions.Create(new IdentityProviderOptions { DefaultAdmin = new AdminInfo { UserName = "admin" } }),
             NullLogger<UserDeletion>.Instance);
         return deletion.DeleteUser(userName, successor);
@@ -553,6 +575,50 @@ public class UserRolesTests
 
         ex.Message.ShouldBe("Cannot delete the last active administrator");
         (await _users.FindByNameAsync("boss")).ShouldNotBeNull();
+    }
+
+    /// <summary>
+    /// Two administrators who delete and disable each other at the same moment: the deletion of jane by boss has
+    /// passed its checks when jane's disable of boss arrives. The disable waits until the deletion is done, then
+    /// finds boss the last active administrator and is refused (red before: the disable checked and ran in between,
+    /// and the deletion then left no active administrator).
+    /// </summary>
+    [Test]
+    public async Task DeleteAndDisableOfEachOther_AtTheSameMoment_LeaveAnActiveAdministrator()
+    {
+        await CreateUser("jane", Admin);
+        var janeId = (await _users.FindByNameAsync("jane"))!.Id;
+        CallerIs("boss");
+
+        // Jane's request, with its own identity store on the same database
+        await using var janesContext = _db.NewContext();
+        using var janesUsers = NewUserManager(janesContext);
+        using var janesRoleManager = new RoleManager<IdentityRole>(new RoleStore<IdentityRole>(janesContext), [],
+            new UpperInvariantLookupNormalizer(), new IdentityErrorDescriber(), NullLogger<RoleManager<IdentityRole>>.Instance);
+        var janesAuth = new Mock<IAuthManager>();
+        janesAuth.Setup(a => a.GetCurrentUserId()).ReturnsAsync(janeId);
+        var janesRoles = new UserRoles(_login.Object, janesUsers, janesRoleManager, _provisioning, janesAuth.Object);
+        var disableRead = false;
+        janesUsers.BeforeFindByName = () => disableRead = true;
+
+        Task? disable = null;
+        _users.BeforeDelete = async () =>
+        {
+            disable = janesRoles.DisableUser("boss");
+
+            // A disable that read the users without waiting for the deletion finishes before the deletion acts
+            if (disableRead)
+                await disable.ContinueWith(_ => { }, TaskScheduler.Default);
+        };
+
+        await using var registry = TestDb.CreateContext<RegistryContext>();
+        await DeleteLocalUser("jane", registry: registry);
+
+        (disable is not null).ShouldBeTrue("the deletion reached its change");
+        var ex = await Should.ThrowAsync<BadRequestException>(() => disable!);
+        ex.Message.ShouldContain("last active administrator");
+        (await _users.FindByNameAsync("jane")).ShouldBeNull();
+        (await RolesOf("boss")).ShouldBe([Admin]);
     }
 
     #endregion
@@ -659,6 +725,29 @@ public class UserRolesTests
             logger, snapshots)
     {
         public Func<User, string, Task>? AfterAddToRole { get; set; }
+
+        /// <summary>Runs (once) when the manager is first asked for a user by name, before it reads the store.</summary>
+        public Action? BeforeFindByName { get; set; }
+
+        /// <summary>Runs (once) before a user is deleted.</summary>
+        public Func<Task>? BeforeDelete { get; set; }
+
+        public override Task<User?> FindByNameAsync(string userName)
+        {
+            var hook = BeforeFindByName;
+            BeforeFindByName = null;
+            hook?.Invoke();
+            return base.FindByNameAsync(userName);
+        }
+
+        public override async Task<IdentityResult> DeleteAsync(User user)
+        {
+            var hook = BeforeDelete;
+            BeforeDelete = null;
+            if (hook != null)
+                await hook();
+            return await base.DeleteAsync(user);
+        }
 
         public override async Task<IdentityResult> AddToRoleAsync(User user, string role)
         {

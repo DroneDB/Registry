@@ -175,6 +175,46 @@
     </Target>
 
 
+    <!--
+      The hash of a Hub build: SHA-256 over the sorted "relative path, SHA-256 of the file" lines of every file
+      under the build folder except version.txt (which holds the stamp itself), first 12 hex digits. Every file
+      counts, also those webpack copies without naming them in index.html (images, viewers, wasm) and the
+      unhashed bundles of a development build. Sorted with an ordinal comparison, so the order the file system
+      lists the files in never changes the hash.
+    -->
+    <UsingTask TaskName="HubBuildHash" TaskFactory="RoslynCodeTaskFactory" AssemblyFile="$(MSBuildToolsPath)/Microsoft.Build.Tasks.Core.dll">
+        <ParameterGroup>
+            <BuildFolder ParameterType="System.String" Required="true" />
+            <Hash ParameterType="System.String" Output="true" />
+        </ParameterGroup>
+        <Task>
+            <Using Namespace="System" />
+            <Using Namespace="System.IO" />
+            <Using Namespace="System.Linq" />
+            <Using Namespace="System.Security.Cryptography" />
+            <Using Namespace="System.Text" />
+            <Code Type="Fragment" Language="cs"><![CDATA[
+                // The task compiles against netstandard2.0: no Path.GetRelativePath, Convert.ToHexString or SHA256.HashData
+                var root = Path.GetFullPath(BuildFolder).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar) + Path.DirectorySeparatorChar;
+                var lines = new StringBuilder();
+                using (var sha = SHA256.Create())
+                {
+                    foreach (var relative in Directory.EnumerateFiles(root, "*", SearchOption.AllDirectories)
+                                 .Select(f => f.Substring(root.Length).Replace('\\', '/'))
+                                 .Where(r => r != "version.txt")
+                                 .OrderBy(r => r, StringComparer.Ordinal))
+                    {
+                        using (var file = File.OpenRead(Path.Combine(root, relative)))
+                            lines.Append(relative).Append(' ').Append(BitConverter.ToString(sha.ComputeHash(file)).Replace("-", "")).Append('\n');
+                    }
+
+                    Hash = BitConverter.ToString(sha.ComputeHash(Encoding.UTF8.GetBytes(lines.ToString())))
+                        .Replace("-", "").Substring(0, 12).ToLowerInvariant();
+                }
+            ]]></Code>
+        </Task>
+    </UsingTask>
+
     <Target Name="PreBuild" BeforeTargets="PreBuildEvent">
 
         <Exec Command="dotnet tool restore" />
@@ -196,9 +236,9 @@
         <Delete Files="$(ProjectDir)/ClientApp.zip" />
 
         <!--
-          Stamp the Hub semantic version (read from ClientApp/package.json) and a hash of the build (the
-          SHA-256 of its index.html, which names every hashed chunk, so any change of the Hub changes it)
-          into the build output, "version+hash", so it ends up inside ClientApp.zip. Registry uses this
+          Stamp the Hub semantic version (read from ClientApp/package.json) and a hash of the build (every
+          file of it, see HubBuildHash, so any change of the Hub changes it) into the build output,
+          "version+hash", so it ends up inside ClientApp.zip. Registry uses this
           marker to decide whether the on-disk Hub needs to be re-extracted: a newer version, or the same
           version of another build (a Hub that changed without a version bump). Only the part before "+"
           is the Hub version the client compares with its own.
@@ -215,12 +255,12 @@
             Condition="'$(HubVersion)' == ''"
             Text="Failed to extract a 'version' field from '$(HubPackageJsonPath)'. Cannot stamp Hub version into ClientApp.zip." />
 
-        <GetFileHash Condition="Exists('$(ProjectDir)/ClientApp/build/index.html')" Files="$(ProjectDir)/ClientApp/build/index.html" Algorithm="SHA256">
-            <Output TaskParameter="Hash" PropertyName="HubIndexHash" />
-        </GetFileHash>
+        <HubBuildHash Condition="Exists('$(ProjectDir)/ClientApp/build')" BuildFolder="$(ProjectDir)/ClientApp/build">
+            <Output TaskParameter="Hash" PropertyName="HubBuildHash" />
+        </HubBuildHash>
         <PropertyGroup>
             <HubStamp>$(HubVersion)</HubStamp>
-            <HubStamp Condition="'$(HubIndexHash)' != ''">$(HubVersion)+$(HubIndexHash.Substring(0, 12).ToLowerInvariant())</HubStamp>
+            <HubStamp Condition="'$(HubBuildHash)' != ''">$(HubVersion)+$(HubBuildHash)</HubStamp>
         </PropertyGroup>
 
         <Message Text="Stamping Hub $(HubStamp) into ClientApp.zip" Importance="high" />

@@ -4,6 +4,7 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
+using Registry.Common;
 using Registry.Ports;
 using Registry.Ports.DroneDB;
 using Registry.Web.Exceptions;
@@ -107,8 +108,8 @@ public sealed class EntryTransferService : IEntryTransferService
             placement.Place(destDdb, destPath, destEntry, sourceDdb.GetLocalPath(sourcePath), isFolder);
 
             // The copy is indexed with the source hashes, not hashed again
+            placement.BeginIndexing();
             CopiedEntries.Index(sourceDdb, sourceEntry, destDdb, destPath, _fs);
-            placement.MarkIndexed();
 
             if (!destDdb.EntryExists(destPath))
                 throw new DdbException($"Cannot find destination '{destPath}' after transfer, something wrong with ddb");
@@ -120,12 +121,12 @@ public sealed class EntryTransferService : IEntryTransferService
             _logger.LogInformation("Copied {Count} build(s) of {Files} file(s) to the destination", copiedBuilds,
                 files.Length);
 
-            // Move semantics: the index entry, then the files (the index only forgets them)
+            // Move semantics: the source index entry goes last; once it is gone the destination is the only copy
+            // the datasets list, so nothing after this point undoes the destination
             if (!keepSource)
             {
                 _logger.LogInformation("Removing source '{SourcePath}'", sourcePath);
                 RemoveSource(sourceDdb, sourcePath);
-                _fs.RemoveEntry(sourceDdb.GetLocalPath(sourcePath), isFolder);
             }
 
             // The destination holds the entry and the source does not: the replaced entry is not needed any more
@@ -137,6 +138,9 @@ public sealed class EntryTransferService : IEntryTransferService
             placement.Rollback();
             throw;
         }
+
+        if (!keepSource)
+            RemoveSourceFiles(sourceDdb, sourcePath, isFolder);
 
         // After the commit: what the datasets tell their watchers is not a reason to undo the transfer
         if (!keepSource)
@@ -208,8 +212,8 @@ public sealed class EntryTransferService : IEntryTransferService
             placement.Place(ddb, dest, destEntry, ddb.GetLocalPath(source), isFolder);
 
             // The copy is indexed with the source hashes, not hashed again
+            placement.BeginIndexing();
             CopiedEntries.Index(ddb, sourceEntry, ddb, dest, _fs);
-            placement.MarkIndexed();
 
             var copiedEntry = ddb.GetEntry(dest)
                               ?? throw new DdbException($"Cannot find destination '{dest}' after copy, something wrong with ddb");
@@ -252,6 +256,16 @@ public sealed class EntryTransferService : IEntryTransferService
             throw new NotFoundException("Cannot find source entry: '" + path + "'");
         }
     }
+
+    /// <summary>
+    /// Deletes the files of a moved source, which the index no longer lists. A file that cannot be deleted (locked,
+    /// read-only) is left on disk and logged: the destination is whole and indexed, and undoing it would lose the
+    /// files already deleted here. The reconciliation sweep finds what is left as unindexed files.
+    /// </summary>
+    private void RemoveSourceFiles(IDDB ddb, string path, bool isFolder) =>
+        BestEffort.Run(() => _fs.RemoveEntry(ddb.GetLocalPath(path), isFolder), ex => _logger.LogWarning(ex,
+            "The transfer of '{SourcePath}' is complete, but its files could not all be deleted from the source dataset: what is left stays unindexed on disk",
+            path));
 
     // The files of an entry: the entry itself, or every file under a folder
     private static string[] FilesOf(IDDB ddb, Entry entry, string path) =>

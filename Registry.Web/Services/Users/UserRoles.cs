@@ -8,6 +8,7 @@ using Microsoft.EntityFrameworkCore;
 using Registry.Web.Exceptions;
 using Registry.Web.Identity;
 using Registry.Web.Identity.Models;
+using Registry.Web.Services.Objects;
 using Registry.Web.Services.Ports;
 using Registry.Web.Utilities;
 
@@ -16,7 +17,8 @@ namespace Registry.Web.Services.Users;
 /// <summary>
 /// The roles and the role assignments an administrator manages. The system roles (<see cref="SystemRoles"/>) cannot be
 /// deleted; <c>deactivated</c> is added and removed only by <see cref="DisableUser"/> and <see cref="EnableUser"/>
-/// (D-043), which work whatever the identity provider.
+/// (D-043), which work whatever the identity provider, and added by <see cref="DeactivateInsteadOfDeleting"/>, the
+/// deletion of a user of an external provider.
 /// </summary>
 public sealed class UserRoles
 {
@@ -41,6 +43,14 @@ public sealed class UserRoles
 
     private const string LastActiveAdminMessage =
         "Cannot disable the last active administrator: make another user an administrator first";
+
+    private const string LastActiveAdminDeleteMessage = "Cannot delete the last active administrator";
+
+    // One per process, not per request (the service is scoped): a disable or a deletion checks who stays an active
+    // administrator and makes its change before the next one checks, so two administrators who disable or delete
+    // each other at once never both pass
+    private static readonly KeyedAsyncLock AdminState = new();
+    private const string AdminStateKey = "active-administrators";
 
     /// <summary>Shorthand accessor for the active provider's capability descriptor.</summary>
     private AuthProviderCapabilities Caps => _loginManager.Capabilities;
@@ -182,6 +192,9 @@ public sealed class UserRoles
     /// <exception cref="BadRequestException">The user is the caller, or the last active administrator.</exception>
     public async Task DisableUser(string userName)
     {
+        // Before anything is read: the checks below see the changes of every disable and deletion before this one
+        using var adminState = await AdminState.AcquireAsync([AdminStateKey]);
+
         var user = await FindUser(userName);
 
         if (user.Id == await _authManager.GetCurrentUserId())
@@ -190,6 +203,20 @@ public sealed class UserRoles
         if (await IsLastActiveAdmin(user))
             throw new BadRequestException(LastActiveAdminMessage);
 
+        await Deactivate(user, () => new BadRequestException(LastActiveAdminMessage));
+    }
+
+    /// <summary>
+    /// Deactivates a user whose deletion <see cref="BeginDeletion"/> allowed, while its lease is held: the deletion of
+    /// a user of an external provider, who would come back at the next sign-in if deleted.
+    /// </summary>
+    /// <exception cref="ForbiddenException">No active administrator would be left.</exception>
+    public Task DeactivateInsteadOfDeleting(User user) =>
+        Deactivate(user, () => new ForbiddenException(LastActiveAdminDeleteMessage));
+
+    // Adds the role 'deactivated' (nothing when the user has it), with the lock of the administrators held
+    private async Task Deactivate(User user, Func<Exception> lastActiveAdmin)
+    {
         if (await _userManager.IsInRoleAsync(user, ApplicationDbContext.DeactivatedRoleName))
             return;
 
@@ -200,15 +227,15 @@ public sealed class UserRoles
 
         var wasAdmin = await _userManager.IsInRoleAsync(user, ApplicationDbContext.AdminRoleName);
         CheckResult(await _userManager.AddToRoleAsync(user, ApplicationDbContext.DeactivatedRoleName),
-            $"disable user '{userName}'");
+            $"disable user '{user.UserName}'");
 
-        // Check, then act: two administrators disabling each other at once both pass the check above. Whoever finds
-        // no active administrator left after its change takes it back
+        // The lock covers this process only: a change made elsewhere (another host, the database) can still pass
+        // the checks at the same time. Whoever finds no active administrator left after its change takes it back
         if (wasAdmin && !await AnyActiveAdmin())
         {
             CheckResult(await _userManager.RemoveFromRoleAsync(user, ApplicationDbContext.DeactivatedRoleName),
-                $"keep user '{userName}' enabled");
-            throw new BadRequestException(LastActiveAdminMessage);
+                $"keep user '{user.UserName}' enabled");
+            throw lastActiveAdmin();
         }
     }
 
@@ -235,18 +262,32 @@ public sealed class UserRoles
     }
 
     /// <summary>
-    /// The rules of deleting an account, the counterpart of those of <see cref="DisableUser"/>: not the caller's own
-    /// account, and not the last active administrator, with or without a successor for the data: an account deleted
-    /// that way leaves nobody who can sign in as an administrator.
+    /// Begins the deletion of an account with the rules of deleting it, the counterpart of those of
+    /// <see cref="DisableUser"/>: not the caller's own account, and not the last active administrator, with or without
+    /// a successor for the data: an account deleted that way leaves nobody who can sign in as an administrator. The
+    /// rules are checked under the lock of the administrators; hold the returned lease until the account is deleted
+    /// (or deactivated), so no disable or other deletion changes who is an active administrator in between.
     /// </summary>
+    /// <returns>The lease of the lock; disposing it ends the deletion.</returns>
     /// <exception cref="ForbiddenException">The user is the caller, or the last active administrator.</exception>
-    public async Task EnsureDeletable(User user)
+    public async Task<IDisposable> BeginDeletion(User user)
     {
-        if (user.Id == await _authManager.GetCurrentUserId())
-            throw new ForbiddenException("You cannot delete your own account");
+        var lease = await AdminState.AcquireAsync([AdminStateKey]);
+        try
+        {
+            if (user.Id == await _authManager.GetCurrentUserId())
+                throw new ForbiddenException("You cannot delete your own account");
 
-        if (await IsLastActiveAdmin(user))
-            throw new ForbiddenException("Cannot delete the last active administrator");
+            if (await IsLastActiveAdmin(user))
+                throw new ForbiddenException(LastActiveAdminDeleteMessage);
+
+            return lease;
+        }
+        catch
+        {
+            lease.Dispose();
+            throw;
+        }
     }
 
     // An active administrator that no other active administrator backs up

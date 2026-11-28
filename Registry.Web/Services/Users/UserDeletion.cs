@@ -60,6 +60,10 @@ public sealed class UserDeletion
         if (user == null)
             throw new BadRequestException("User does not exist");
 
+        // Your own account and the last active administrator are refused first, whatever the identity provider and
+        // the successor; the lease keeps the administrators as checked until the account is gone
+        using var deletion = await _roles.BeginDeletion(user);
+
         // For external providers, physically deleting a user is futile (the user would be re-created
         // on the next login if still valid in the directory). Deactivate instead.
         if (!Caps.SupportsLocalUserManagement)
@@ -76,15 +80,10 @@ public sealed class UserDeletion
                 "User {UserName} is managed by an external identity provider. " +
                 "Deactivating instead of deleting", userName);
 
-            // The disable of the Users list, with its rules: not your own account, not the last active administrator
-            await _roles.DisableUser(userName);
+            await _roles.DeactivateInsteadOfDeleting(user);
 
             return new DeleteUserResultDto { UserName = userName, DatasetResults = [] };
         }
-
-        // The deletion of the Users list refuses what its disable refuses (the external branch above answers it as
-        // its disable does): your own account, and the last active administrator, with or without a successor
-        await _roles.EnsureDeletable(user);
 
         // Validate successor if specified
         User? successorUser = null;

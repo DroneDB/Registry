@@ -124,7 +124,7 @@ public sealed class UploadCommitter
         }
         catch (Exception ex)
         {
-            // Request-level failure (quota, a native outage, an index write that did not finish): a file already
+            // Request-level failure (quota, a native outage, a canceled index write): a file already
             // moved into the dataset that has no entry must not stay as an unindexed file that blocks the retry
             foreach (var (i, m) in moved)
                 if (outcomes[i] == null && m.Entry == null)
@@ -159,9 +159,14 @@ public sealed class UploadCommitter
     // A file placed in the dataset that has no entry. An error that passes (the index is busy, its write did not
     // finish in time) takes the file back out, so the retry meets a free name and the file is not left unindexed, which
     // would be refused as a clash and counted as a replaced file by a share batch. Anything else is quarantined.
+    // A file whose index write is still running stays: taken out, the index would list it without its file once
+    // that write commits.
     private void DropUnindexed(UploadRequestContext ctx, MovedUploadPart moved, Exception error)
     {
-        if (error is TransientException or DdbBusyException)
+        if (error is IndexWritePendingException)
+            _logger.LogWarning(error, "'{Path}' in dataset '{OrgSlug}/{DsSlug}' is still being indexed: it stays",
+                moved.Part.Path, ctx.OrgSlug, ctx.DsSlug);
+        else if (error is TransientException or DdbBusyException)
             _files.Withdraw(ctx, moved, error);
         else
             _files.Quarantine(ctx, moved.Part.Path, moved.LocalPath, error);

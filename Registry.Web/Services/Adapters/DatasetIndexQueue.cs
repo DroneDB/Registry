@@ -34,6 +34,27 @@ public sealed class DatasetIndexQueue : IDatasetIndexQueue, IDisposable
 
         /// <summary>Enqueued by an upload registered with <see cref="BeginUpload"/>.</summary>
         public bool Tracked { get; init; }
+
+        private const int Waiting = 0, InBatch = 1, Dropped = 2;
+        private int _state;
+
+        /// <summary>
+        /// Taken into a native batch (by the drain loop, right before the batch is written): from now on the
+        /// request is applied or fails there, it can no longer be dropped. False when the caller dropped it.
+        /// </summary>
+        public bool TryTake() => Interlocked.CompareExchange(ref _state, InBatch, Waiting) == Waiting;
+
+        /// <summary>
+        /// Given up by its caller before a batch took it: it is never applied (the drain loop skips it) and its
+        /// task is canceled. False when a batch already took it.
+        /// </summary>
+        public bool TryDrop()
+        {
+            if (Interlocked.CompareExchange(ref _state, Dropped, Waiting) != Waiting)
+                return false;
+            Tcs.TrySetCanceled();
+            return true;
+        }
     }
 
     private sealed class DatasetLane
@@ -157,6 +178,10 @@ public sealed class DatasetIndexQueue : IDatasetIndexQueue, IDisposable
         using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(_opts.EnqueueTimeoutSeconds), _time);
         using var linked = CancellationTokenSource.CreateLinkedTokenSource(ct, timeout.Token, _shutdown.Token);
 
+        // Every request made for each item, on every lane it was written to (the latest last): when the caller
+        // gives up, those no batch took yet are dropped, so nothing is applied after the caller stopped waiting
+        var requests = items.Select(_ => new List<IndexRequest>(1)).ToArray();
+
         try
         {
             while (true)
@@ -176,6 +201,7 @@ public sealed class DatasetIndexQueue : IDatasetIndexQueue, IDisposable
                         var tcs = new TaskCompletionSource<Entry>(TaskCreationOptions.RunContinuationsAsynchronously);
                         var request = new IndexRequest { Item = items[i], Tcs = tcs, Tracked = upload != null };
                         tasks[i] = tcs.Task;
+                        requests[i].Add(request);
 
                         // Backpressure: if the lane's channel is full, this await blocks the caller
                         // (does not throw or silently drop) until room is available or the
@@ -186,11 +212,13 @@ public sealed class DatasetIndexQueue : IDatasetIndexQueue, IDisposable
                 }
                 catch (ChannelClosedException)
                 {
-                    // The lane retired mid-write. Whatever it already accepted is committed (or
-                    // failed) by the retiring drain loop, so those results are redundant: observe
-                    // them and replay the whole set on a fresh lane. Re-adding an already-committed
-                    // path is safe - the native layer reports it as unchanged.
-                    ObserveAbandoned(tasks, accepted);
+                    // The lane retired mid-write: what it accepted and no batch took yet is dropped, what a batch
+                    // took commits (or fails) there and nobody needs its result; the whole set is replayed on a
+                    // fresh lane. Re-adding an already-committed path is safe - the native layer reports it as
+                    // unchanged.
+                    for (var i = 0; i < accepted; i++)
+                        if (!requests[i][^1].TryDrop())
+                            ObserveAbandoned(tasks[i]);
                     continue;
                 }
 
@@ -200,16 +228,10 @@ public sealed class DatasetIndexQueue : IDatasetIndexQueue, IDisposable
 
                 // Guard the await too, not just the channel writes: once the whole set is
                 // accepted, a stalled native batch must still respect the deadline/cancellation
-                // instead of hanging the caller. On timeout/cancel the lane keeps completing
-                // these TCSs, so observe the now-unawaited results before rethrowing.
+                // instead of hanging the caller (the catch below drops what is still waiting).
                 try
                 {
                     await Task.WhenAll(tasks).WaitAsync(linked.Token);
-                }
-                catch (OperationCanceledException) when (linked.IsCancellationRequested)
-                {
-                    ObserveAbandoned(tasks, items.Count);
-                    throw;
                 }
                 catch (Exception) when (tasks.All(t => t.IsCompleted))
                 {
@@ -223,13 +245,55 @@ public sealed class DatasetIndexQueue : IDatasetIndexQueue, IDisposable
                     .ToArray();
             }
         }
-        catch (OperationCanceledException) when (timeout.IsCancellationRequested && !ct.IsCancellationRequested)
+        catch (OperationCanceledException) when (linked.IsCancellationRequested)
         {
             upload?.End();
-            throw new TransientException(
+            var outcomes = requests.Select(GiveUp).ToArray();
+
+            // Canceled by the caller or by the shutdown: what was not applied never will be
+            if (!timeout.IsCancellationRequested || ct.IsCancellationRequested)
+                throw;
+
+            // The deadline: each item says what became of it, so the caller knows which files the index will
+            // never list (safe to take out) and which a batch is still writing (to be left in place)
+            var late = new TransientException(
                 $"Index write for dataset '{dataset.OrgSlug}/{dataset.InternalRef}' did not complete within " +
                 $"{_opts.EnqueueTimeoutSeconds}s");
+            return outcomes.Select(o => o ?? new IndexOutcome(null, late)).ToArray();
         }
+    }
+
+    /// <summary>
+    /// What became of an item whose caller stopped waiting: its entry when a request of it was applied, the error
+    /// of its latest request when that one failed, an <see cref="IndexWritePendingException"/> while a batch that
+    /// took it is still running; null when it was dropped before any batch took it (it is never applied). Every
+    /// request no batch took is dropped first.
+    /// </summary>
+    private static IndexOutcome? GiveUp(List<IndexRequest> requestsOfItem)
+    {
+        var pending = false;
+        foreach (var request in requestsOfItem)
+        {
+            if (request.TryDrop())
+                continue;
+
+            var task = request.Tcs.Task;
+            if (task.IsCompletedSuccessfully)
+                return new IndexOutcome(task.Result, null);
+            if (!task.IsCompleted)
+            {
+                pending = true;
+                ObserveAbandoned(task);
+            }
+        }
+
+        if (pending)
+            return new IndexOutcome(null, new IndexWritePendingException(requestsOfItem[^1].Path));
+
+        var latest = requestsOfItem.Count > 0 ? requestsOfItem[^1].Tcs.Task : null;
+        return latest is { IsFaulted: true }
+            ? new IndexOutcome(null, latest.Exception!.InnerException ?? latest.Exception)
+            : null;
     }
 
     /// <summary>
@@ -251,14 +315,11 @@ public sealed class DatasetIndexQueue : IDatasetIndexQueue, IDisposable
         }
     }
 
-    // Requests handed to a lane that retired mid-write are completed by that lane, but nobody
-    // awaits them anymore; observe faults so they never surface as UnobservedTaskException.
-    private static void ObserveAbandoned(Task<Entry>[] tasks, int count)
-    {
-        for (var i = 0; i < count; i++)
-            _ = tasks[i].ContinueWith(static t => _ = t.Exception,
-                TaskContinuationOptions.OnlyOnFaulted | TaskContinuationOptions.ExecuteSynchronously);
-    }
+    // A request a batch took is completed by that batch, but nobody awaits it anymore; observe its
+    // fault so it never surfaces as UnobservedTaskException.
+    private static void ObserveAbandoned(Task<Entry> task) =>
+        _ = task.ContinueWith(static t => _ = t.Exception,
+            TaskContinuationOptions.OnlyOnFaulted | TaskContinuationOptions.ExecuteSynchronously);
 
     public void Release(DatasetKey dataset)
     {
@@ -464,6 +525,12 @@ public sealed class DatasetIndexQueue : IDatasetIndexQueue, IDisposable
 
     private async Task CommitBatchAsync(DatasetKey key, List<IndexRequest> batch)
     {
+        // Taken right before the native write: a request its caller dropped meanwhile (it stopped waiting and may
+        // have taken the file out again) is never applied
+        batch = batch.Where(r => r.TryTake()).ToList();
+        if (batch.Count == 0)
+            return;
+
         // Last writer wins per path within a batch: keep only each path's most recent request,
         // but complete every duplicate request's TCS with the same resulting Entry.
         var byPath = new Dictionary<string, List<IndexRequest>>();
@@ -596,4 +663,16 @@ public sealed class DatasetIndexQueue : IDatasetIndexQueue, IDisposable
         _shutdown.Cancel();
         _shutdown.Dispose();
     }
+}
+
+/// <summary>
+/// The caller stopped waiting while a native batch that took the file was still being written: the outcome is not
+/// known yet. The file must stay where it is: the batch lists it when it commits, and the reconciliation sweep
+/// indexes it when that batch fails. Transient (HTTP 503 with <c>Retry-After</c>) for the client.
+/// </summary>
+public sealed class IndexWritePendingException(string path)
+    : TransientException($"The index write of '{path}' is still running; its outcome is not known yet")
+{
+    /// <summary>The dataset path whose index write is still running.</summary>
+    public string Path { get; } = path;
 }
