@@ -3518,7 +3518,8 @@
           "disclaimer": "Disclaimer-text",
           "defaultSections": [
             "DefaultSections-text"
-          ]
+          ],
+          "breakdownChart": "BreakdownChart-text"
         }
       ],
       "schema": {
@@ -3928,7 +3929,8 @@
           "disclaimer": "Disclaimer-text",
           "defaultSections": [
             "DefaultSections-text"
-          ]
+          ],
+          "breakdownChart": "BreakdownChart-text"
         }
       ],
       "schema": {
@@ -3978,7 +3980,8 @@
           "disclaimer": "Disclaimer-text",
           "defaultSections": [
             "DefaultSections-text"
-          ]
+          ],
+          "breakdownChart": "BreakdownChart-text"
         }
       ],
       "schema": {
@@ -4034,7 +4037,8 @@
       "disclaimer": "Disclaimer-text",
       "defaultSections": [
         "DefaultSections-text"
-      ]
+      ],
+      "breakdownChart": "BreakdownChart-text"
     },
     "sparse": {
       "id": null,
@@ -4047,7 +4051,8 @@
       "headerText": null,
       "footerText": null,
       "disclaimer": null,
-      "defaultSections": null
+      "defaultSections": null,
+      "breakdownChart": null
     }
   },
   "Registry.Web.Models.DTO.RescanJobDto": {

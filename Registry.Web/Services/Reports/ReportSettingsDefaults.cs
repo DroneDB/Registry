@@ -22,6 +22,12 @@ public static class ReportSettingsDefaults
     /// <summary>The page orientations a template can name.</summary>
     public static readonly IReadOnlyList<string> Orientations = ["portrait", "landscape"];
 
+    /// <summary>How the summary of a report can draw its counts: a bar per count, or a donut per group of counts.</summary>
+    public static readonly IReadOnlyList<string> BreakdownCharts = ["bars", "donuts"];
+
+    /// <summary>How a template that names no chart draws the counts of the summary.</summary>
+    public const string DefaultBreakdownChart = "bars";
+
     /// <summary>The template of an organization without templates (a new one on each call: the caller may change it).</summary>
     public static ReportTemplateDto StandardTemplate() => new()
     {
@@ -35,7 +41,8 @@ public static class ReportSettingsDefaults
         HeaderText = "",
         FooterText = "",
         Disclaimer = "",
-        DefaultSections = [.. SectionKinds]
+        DefaultSections = [.. SectionKinds],
+        BreakdownChart = DefaultBreakdownChart
     };
 
     /// <summary>The templates of an organization without any: the Standard one.</summary>

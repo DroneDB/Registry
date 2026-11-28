@@ -42,6 +42,12 @@ public class ReportTemplateDto
 
     /// <summary>The kinds of the sections a new report has (cover, summary, overview, tables, items, notes).</summary>
     public List<string>? DefaultSections { get; set; }
+
+    /// <summary>
+    /// How the summary of a report draws its counts by kind, category, severity and status: <c>bars</c> or <c>donuts</c>.
+    /// A write without it, and a template stored before it existed, have <c>bars</c>.
+    /// </summary>
+    public string? BreakdownChart { get; set; }
 }
 
 /// <summary>A category or a severity of the annotation schema.</summary>

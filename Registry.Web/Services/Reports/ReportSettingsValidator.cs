@@ -105,7 +105,12 @@ public static partial class ReportSettingsValidator
                 HeaderText = OptionalText(template.HeaderText, MaxPageTextLength, $"{at}.headerText", $"{label}: headerText"),
                 FooterText = OptionalText(template.FooterText, MaxPageTextLength, $"{at}.footerText", $"{label}: footerText"),
                 Disclaimer = OptionalText(template.Disclaimer, MaxDisclaimerLength, $"{at}.disclaimer", $"{label}: disclaimer"),
-                DefaultSections = ValidateSections(template.DefaultSections, $"{at}.defaultSections", label)
+                DefaultSections = ValidateSections(template.DefaultSections, $"{at}.defaultSections", label),
+                // A client older than the choice sends none: its templates keep the bars they had
+                BreakdownChart = template.BreakdownChart == null
+                    ? ReportSettingsDefaults.DefaultBreakdownChart
+                    : RequireOneOf(template.BreakdownChart, ReportSettingsDefaults.BreakdownCharts,
+                        $"{at}.breakdownChart", $"{label}: breakdownChart")
             });
         }
 

@@ -63,6 +63,26 @@ public class ReportSettingsValidatorTests
             .ShouldBe(("standard", "Standard", null, "#0070e0", "#0891b2", "A4", "portrait"));
         (template.HeaderText, template.FooterText, template.Disclaimer).ShouldBe(("", "", ""));
         template.DefaultSections.ShouldBe(["cover", "summary", "overview", "tables", "items", "notes"]);
+        template.BreakdownChart.ShouldBe("bars");
+    }
+
+    [TestCase("bars")]
+    [TestCase("donuts")]
+    public void TheSummaryChart_IsKept(string chart)
+    {
+        var update = Valid();
+        update.Templates![0].BreakdownChart = chart;
+
+        ReportSettingsValidator.Validate(update).Templates[0].BreakdownChart.ShouldBe(chart);
+    }
+
+    [Test]
+    public void AWriteWithoutTheSummaryChart_HasBars()
+    {
+        var update = Valid();
+        update.Templates![0].BreakdownChart = null;
+
+        ReportSettingsValidator.Validate(update).Templates[0].BreakdownChart.ShouldBe("bars");
     }
 
     [Test]
@@ -133,6 +153,8 @@ public class ReportSettingsValidatorTests
         yield return Case("ShortAccent", "templates[0].accent", u => u.Templates![0].Accent = "#fff");
         yield return Case("BadPaper", "templates[0].paper", u => u.Templates![0].Paper = "Legal");
         yield return Case("BadOrientation", "templates[0].orientation", u => u.Templates![0].Orientation = "diagonal");
+        yield return Case("BadSummaryChart", "templates[0].breakdownChart", u => u.Templates![0].BreakdownChart = "pies");
+        yield return Case("SummaryChartInCapitals", "templates[0].breakdownChart", u => u.Templates![0].BreakdownChart = "Donuts");
         yield return Case("LongHeader", "templates[0].headerText", u => u.Templates![0].HeaderText = new string('h', 201));
         yield return Case("LongFooter", "templates[0].footerText", u => u.Templates![0].FooterText = new string('f', 201));
         yield return Case("LongDisclaimer", "templates[0].disclaimer",

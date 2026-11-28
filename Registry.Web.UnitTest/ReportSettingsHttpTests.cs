@@ -257,6 +257,37 @@ public sealed class ReportSettingsHttpTests : IDisposable
     }
 
     [Test]
+    public async Task ATemplateStoredBeforeTheSummaryChart_IsReadWithBars_AndAChosenChartIsStored()
+    {
+        var org = await NewOrganizationAsync();
+        (await PutSettings(org, Update(0, "standard", "brand"))).Status.ShouldBe(200);
+        using (var scope = _factory.Services.CreateScope())
+        {
+            // The row as a Registry that did not know the member wrote it
+            var context = scope.ServiceProvider.GetRequiredService<RegistryContext>();
+            var row = await context.OrganizationReportSettings.SingleAsync(s => s.OrganizationSlug == org);
+            var templates = JsonNode.Parse(row.Templates)!.AsArray();
+            foreach (var template in templates)
+                template!.AsObject().Remove("breakdownChart");
+            row.Templates = templates.ToJsonString();
+            await context.SaveChangesAsync();
+        }
+
+        var read = await GetSettings(org, Member);
+        Stored(read, "standard", "breakdownChart").ShouldBe("bars");
+        Stored(read, "brand", "breakdownChart").ShouldBe("bars");
+        var forReaders = await SendAsync(HttpMethod.Get, DatasetSettings(org, PrivateDs), Member);
+        forReaders.Json["templates"]!.AsArray().Select(t => t!["breakdownChart"]!.GetValue<string>()).ShouldBe(["bars", "bars"]);
+
+        var update = Update(1, "standard", "brand");
+        update["templates"]![1]!["breakdownChart"] = "donuts";
+        (await PutSettings(org, update)).Status.ShouldBe(200);
+        var stored = await GetSettings(org, Member);
+        Stored(stored, "standard", "breakdownChart").ShouldBe("bars");
+        Stored(stored, "brand", "breakdownChart").ShouldBe("donuts");
+    }
+
+    [Test]
     public async Task TheDatasetScopedRead_HasTheSameDefaults_AndNoVersion()
     {
         var org = await NewOrganizationAsync();

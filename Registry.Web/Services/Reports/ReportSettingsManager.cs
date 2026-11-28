@@ -234,8 +234,17 @@ public sealed class ReportSettingsManager
         return row == null
             ? new Current(null, ReportSettingsDefaults.Templates(), ReportSettingsDefaults.Schema())
             : new Current(row,
-                ApiJson.Deserialize<List<ReportTemplateDto>>(row.Templates) ?? [],
+                StoredTemplates(row.Templates),
                 ApiJson.Deserialize<ReportSchemaDto>(row.Schema) ?? ReportSettingsDefaults.Schema());
+    }
+
+    // The stored templates, with what a template stored before a member existed has: the answer always has them all
+    private static List<ReportTemplateDto> StoredTemplates(string json)
+    {
+        var templates = ApiJson.Deserialize<List<ReportTemplateDto>>(json) ?? [];
+        foreach (var template in templates)
+            template.BreakdownChart ??= ReportSettingsDefaults.DefaultBreakdownChart;
+        return templates;
     }
 
     // Writes the settings as the new version (the first write inserts the row) and logs it

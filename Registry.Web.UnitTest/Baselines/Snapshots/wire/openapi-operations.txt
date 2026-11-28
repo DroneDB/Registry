@@ -1388,7 +1388,7 @@ schema ReportSchemaStatusDto { id:string, name:string, closed:boolean }
 schema ReportSettingsDto { templates:array<ReportTemplateDto>, schema:ReportSchemaDto, organizationLogoUrl:string }
 schema ReportSettingsUpdateDto { templates:array<ReportTemplateDto>, schema:ReportSchemaDto, version:integer(int32) }
 schema ReportSettingsVersionDto { version:integer(int32) }
-schema ReportTemplateDto { id:string, name:string, logo:string, primary:string, accent:string, paper:string, orientation:string, headerText:string, footerText:string, disclaimer:string, defaultSections:array<string> }
+schema ReportTemplateDto { id:string, name:string, logo:string, primary:string, accent:string, paper:string, orientation:string, headerText:string, footerText:string, disclaimer:string, defaultSections:array<string>, breakdownChart:string }
 schema RescanJobDto { jobId:string }
 schema RescanRequestDto { organizationSlug:string, datasetSlug:string, types:array<string>, extensions:array<string>, stopOnError:boolean }
 schema ShareInitResultDto { token:string }
