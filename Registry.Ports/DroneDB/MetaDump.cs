@@ -1,13 +1,13 @@
-﻿using Newtonsoft.Json;
+using System.Text.Json.Serialization;
 
 namespace Registry.Ports.DroneDB;
 
 public class MetaDump : Meta
 {
-    [JsonProperty("path")]
-    public string Path { get; set; }
+    [JsonPropertyName("path")]
+    public string Path { get; set; } = "";
 
-    [JsonProperty("key")]
-    public string Key { get; set; }
+    [JsonPropertyName("key")]
+    public string Key { get; set; } = "";
 
 }

@@ -1,4 +1,9 @@
-﻿using Microsoft.AspNetCore.Mvc;
+using System.IO;
+using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.ResponseCompression;
+using Microsoft.Net.Http.Headers;
+using Registry.Web.Utilities;
 
 namespace Registry.Web.Models;
 
@@ -11,4 +16,87 @@ namespace Registry.Web.Models;
 /// </summary>
 public class ControllerBaseEx : ControllerBase
 {
+    /// <summary>
+    /// A file on disk with its validators: <c>Last-Modified</c> from the file, <c>ETag</c> when the caller knows
+    /// one, and range processing, so the framework answers <c>If-None-Match</c> (304), <c>If-Modified-Since</c>,
+    /// <c>Range</c> (206) and <c>If-Range</c> itself.
+    /// </summary>
+    /// <param name="path">The file.</param>
+    /// <param name="contentType">Its media type.</param>
+    /// <param name="entityTag">A quoted entity tag (<c>"…"</c> or <c>W/"…"</c>), or null for none.</param>
+    /// <param name="downloadName">The download name (<c>Content-Disposition</c>), or null for none.</param>
+    [NonAction]
+    public PhysicalFileResult ValidatedPhysicalFile(string path, string contentType, string? entityTag,
+        string? downloadName = null) =>
+        ValidatedPhysicalFile(path, new FileInfo(path), contentType, entityTag, downloadName);
+
+    /// <summary>
+    /// <see cref="ValidatedPhysicalFile(string, string, string?, string?)"/> for a file whose content has no tag of
+    /// its own to offer: the tag is taken from the file system (<see cref="EntityTags.OfFile"/>), so it follows
+    /// the file when it is rewritten. It is strong, so <c>Range</c> with <c>If-Range</c> resumes the file, unless
+    /// <paramref name="compression"/> may encode the response: then it is weak.
+    /// </summary>
+    /// <param name="path">The file.</param>
+    /// <param name="contentType">Its media type.</param>
+    /// <param name="compression">The provider of the response compression middleware the response goes through.</param>
+    /// <param name="downloadName">The download name (<c>Content-Disposition: attachment</c>), or null to leave the file shown in place.</param>
+    [NonAction]
+    public PhysicalFileResult FileTaggedPhysicalFile(string path, string contentType,
+        IResponseCompressionProvider compression, string? downloadName = null)
+    {
+        var file = new FileInfo(path);
+        var tag = EntityTags.OfFile(file, weak: MayBeContentEncoded(contentType, compression));
+        return ValidatedPhysicalFile(path, file, contentType, tag, downloadName);
+    }
+
+    /// <summary>
+    /// A file a user put in a dataset, sent as <see cref="UserContentPolicy"/> allows: with the type and the
+    /// <c>Content-Security-Policy</c> it gives, and shown in place only when the client asked for that
+    /// (<paramref name="inline"/>) and the type may be; otherwise an attachment named <paramref name="fileName"/>.
+    /// </summary>
+    [NonAction]
+    public PhysicalFileResult UserEntryFile(string path, string fileName, bool inline, bool enableRangeProcessing = true)
+    {
+        var served = UserContentPolicy.ForEntry(fileName);
+        Response.Headers.ContentSecurityPolicy = served.ContentSecurityPolicy;
+        return PhysicalFile(path, served.MediaType, inline && served.Inline ? null : fileName, enableRangeProcessing);
+    }
+
+    // ASP.NET Core's response compression gzips or brotlis a 200 of a media type it compresses and leaves its ETag
+    // as it was (it adds Vary: Accept-Encoding, drops Content-Length and Content-MD5, and skips a 206, which has a
+    // Content-Range): a strong tag would then name two different byte sequences. The middleware's own provider
+    // decides, on this response with its type, so the tag is weak exactly for the types it would encode (JSON, not
+    // the .rad or .tif a viewer reads by ranges) and the same for 200, 206, 304 and HEAD whatever the client accepts.
+    private bool MayBeContentEncoded(string contentType, IResponseCompressionProvider compression)
+    {
+        Response.ContentType = contentType;
+        return compression.ShouldCompressResponse(HttpContext);
+    }
+
+    private PhysicalFileResult ValidatedPhysicalFile(string path, FileInfo file, string contentType,
+        string? entityTag, string? downloadName) =>
+        PhysicalFile(path, contentType, downloadName, file.LastWriteTimeUtc,
+            entityTag is null ? null! : EntityTagHeaderValue.Parse(entityTag), enableRangeProcessing: true);
+
+    /// <summary>
+    /// 200 with <paramref name="value"/> for an action declared <c>ActionResult&lt;T&gt;</c> whose <c>T</c> is an interface
+    /// (<c>IEnumerable&lt;X&gt;</c>): C# has no implicit conversion from an interface type to <c>ActionResult&lt;T&gt;</c>, so
+    /// <c>return list;</c> does not compile there. Name <typeparamref name="T"/> when the value's static type is another one.
+    /// </summary>
+    [NonAction]
+    public static ActionResult<T> Answer<T>(T value) => new(value);
+
+    /// <summary>
+    /// 200 with <paramref name="value"/>, or 304 when the request's <c>If-None-Match</c> has <paramref name="entityTag"/>;
+    /// both carry the tag and <paramref name="cacheControl"/>. For a JSON response whose tag the caller computed.
+    /// </summary>
+    [NonAction]
+    public IActionResult OkUnlessNotModified(object value, string entityTag, string cacheControl)
+    {
+        var tag = EntityTagHeaderValue.Parse(entityTag);
+        var headers = Response.GetTypedHeaders();
+        headers.ETag = tag;
+        headers.CacheControl = CacheControlHeaderValue.Parse(cacheControl);
+        return EntityTags.IfNoneMatch(Request, tag) ? StatusCode(StatusCodes.Status304NotModified) : Ok(value);
+    }
 }

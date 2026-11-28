@@ -1,4 +1,3 @@
-﻿using System;
 using Microsoft.EntityFrameworkCore.Migrations;
 
 #nullable disable
@@ -57,7 +56,7 @@ namespace Registry.Web.Data.MySqlMigrations.Migrations
 
             migrationBuilder.Sql(
                 "CREATE INDEX `IX_JobIndices_OrgSlug_DsSlug_Path` " +
-                "ON `JobIndices` (`OrgSlug`, `DsSlug`, `Path`(512))");
+                "ON `JobIndices` (`OrgSlug`, `DsSlug`, `Path`(512));");
 
             migrationBuilder.CreateIndex(
                 name: "IX_JobIndices_UserId",

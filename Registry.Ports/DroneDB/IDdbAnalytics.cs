@@ -1,3 +1,5 @@
+using System;
+using System.Threading;
 namespace Registry.Ports.DroneDB;
 
 /// <summary>
@@ -14,11 +16,14 @@ public interface IDdbAnalytics
     /// <summary>
     /// Auto-detect a stockpile footprint starting from a click on the raster
     /// </summary>
+    /// <exception cref="DdbInvalidArgumentsException">Nothing to detect: the click is outside the raster, the
+    /// search region has no data or no pile, or the search window is too small.</exception>
     string DetectStockpile(string path, double lat, double lon, double radiusMeters, float sensitivity);
 
     /// <summary>
-    /// Auto-detect ALL stockpile footprints by full-DEM scan.
+    /// Auto-detect ALL stockpile footprints by full-DEM scan (no pile found is an empty list).
     /// </summary>
+    /// <exception cref="DdbInvalidArgumentsException">The raster has no valid elevation.</exception>
     string DetectAllStockpiles(string path, float sensitivity, double minAreaM2, int maxResults);
 
     /// <summary>
@@ -33,4 +38,36 @@ public interface IDdbAnalytics
                             double? maxElev = null,
                             double simplifyTolerance = 0.0,
                             int bandIndex = 1);
+
+    /// <summary>
+    /// <see cref="GenerateContours(string, double?, int?, double, double?, double?, double, int)"/> with the options of the
+    /// values (the NoData override). The levels, the range and the elevations are in the units of the band.
+    /// </summary>
+    string GenerateContours(string path,
+                            double? interval,
+                            int? count,
+                            double baseOffset,
+                            double? minElev,
+                            double? maxElev,
+                            double simplifyTolerance,
+                            int bandIndex,
+                            RasterAnalysisOptions? options);
+
+    /// <summary>
+    /// <see cref="GenerateContours(string, double?, int?, double, double?, double?, double, int, RasterAnalysisOptions?)"/> that
+    /// reports its progress (fraction 0..1 and the phase: "statistics", "levels", "lines") and stops when
+    /// <paramref name="cancellationToken"/> is canceled (<see cref="DdbCanceledException"/>). The output says when the
+    /// lines were cut at the cap (<c>truncated</c>, <c>featureCap</c>).
+    /// </summary>
+    string GenerateContours(string path,
+                            double? interval,
+                            int? count,
+                            double baseOffset,
+                            double? minElev,
+                            double? maxElev,
+                            double simplifyTolerance,
+                            int bandIndex,
+                            RasterAnalysisOptions? options,
+                            Action<double, string?>? progress,
+                            CancellationToken cancellationToken);
 }

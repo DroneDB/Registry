@@ -1,0 +1,19 @@
+{
+  "request": "GET /orgs/golden-org/ds/golden-ds/meta/get/tags",
+  "caller": "organization owner",
+  "status": 200,
+  "contentType": "application/json; charset=utf-8",
+  "bodyKind": "json",
+  "body": [
+    {
+      "data": "survey",
+      "id": "<guid>",
+      "mtime": 0
+    },
+    {
+      "data": "2024",
+      "id": "<guid>",
+      "mtime": 0
+    }
+  ]
+}

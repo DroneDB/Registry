@@ -1,0 +1,10 @@
+{
+  "request": "POST /share/init",
+  "caller": "organization owner",
+  "status": 200,
+  "contentType": "application/json; charset=utf-8",
+  "bodyKind": "json",
+  "body": {
+    "token": "<token>"
+  }
+}

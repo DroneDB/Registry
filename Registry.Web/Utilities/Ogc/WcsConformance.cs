@@ -13,8 +13,17 @@ public static class WcsConformance
     public const string Core = "http://www.opengis.net/spec/WCS/2.0/conf/core";
     public const string GetKvp = "http://www.opengis.net/spec/WCS_protocol-binding_get-kvp/1.0/conf/get-kvp";
 
+    /// <summary>
+    /// The scaling extension (OGC 12-039 requirement 1, extension-identifier): the server reads SCALEFACTOR, SCALEAXES
+    /// and SCALESIZE (<see cref="WcsScalingParser"/>); SCALEEXTENT is not implemented.
+    /// </summary>
+    public const string Scaling = "http://www.opengis.net/spec/WCS_service-extension_scaling/1.0/conf/scaling";
+
     /// <summary>WCS 2.0 profiles (used by <see cref="WcsProtocol20Handler"/>).</summary>
-    public static readonly string[] Profiles = [Core, GetKvp];
+    public static readonly string[] Profiles = [Core, GetKvp, Scaling];
+
+    /// <summary>The operations every WCS version advertises.</summary>
+    public static readonly string[] Operations = ["GetCapabilities", "DescribeCoverage", "GetCoverage"];
 
     /// <summary>Supported wire versions (ordered: highest first).</summary>
     public static readonly string[] SupportedVersions = ["2.0.1", "1.1.1", "1.0.0"];
@@ -36,7 +45,7 @@ public static class WcsConformance
     ];
 
     /// <summary>Translate a WCS 1.0 short format name (or pass-through MIME) into a MIME type.</summary>
-    public static string NormalizeWcs10Format(string format)
+    public static string NormalizeWcs10Format(string? format)
     {
         if (string.IsNullOrWhiteSpace(format)) return "image/tiff";
         return format.Trim().ToLowerInvariant() switch

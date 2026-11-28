@@ -1,4 +1,3 @@
-#nullable enable
 namespace Registry.Web.Models.Configuration;
 
 /// <summary>
@@ -20,8 +19,14 @@ public class IndexQueueSettings
     /// <summary>Per-dataset backpressure threshold (bounded channel capacity).</summary>
     public int QueueCapacityPerDataset { get; set; } = 512;
 
-    /// <summary>Caller-side deadline before a transient failure is returned.</summary>
-    public int EnqueueTimeoutSeconds { get; set; } = 120;
+    /// <summary>
+    /// Caller-side deadline before a transient failure is returned. Longer than a busy batch can take to fail: libddb
+    /// retries a locked index for 60 s (its retry deadline), then one more wait of up to 2 s and one attempt of up to
+    /// the 200 ms busy timeout, about 62 s, and the queue retries the batch once, so a batch on an index locked for
+    /// longer fails after about 125 s. With 150 s that failure, or a success, reaches the caller before the deadline in
+    /// the common case, and the file is withdrawn or listed while the request still waits; 120 s always ended first.
+    /// </summary>
+    public int EnqueueTimeoutSeconds { get; set; } = 150;
 
     /// <summary>
     /// Seconds a per-dataset lane may stay idle (no queued work, no enqueue activity) before

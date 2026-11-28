@@ -1,22 +1,19 @@
-#nullable enable
 using System;
+using System.Collections.Generic;
 using System.IO;
-using System.Linq;
-using System.Linq.Expressions;
 using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
-using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Registry.Common;
-using Registry.Ports.DroneDB;
-using Registry.Ports.Import;
-using Registry.Web.Models;
+using Registry.Ports;
+using Registry.Web.Exceptions;
 using Registry.Web.Models.Configuration;
+using Registry.Web.Services.Adapters;
 using Registry.Web.Services.HeavyTasks.Models;
 using Registry.Web.Services.HeavyTasks.Ports;
 using Registry.Web.Services.Import;
+using Registry.Web.Services.Jobs;
 using Registry.Web.Services.Ports;
 using Registry.Web.Utilities;
 
@@ -31,8 +28,20 @@ namespace Registry.Web.Services.HeavyTasks.Tools;
 /// enqueued (mirrors <see cref="ImportDatasetTool"/>). Mutates the dataset in place, so it produces no
 /// downloadable artifact.
 /// </summary>
-public sealed class FileUrlImportTool : IHeavyTool
+public sealed class FileUrlImportTool : HeavyToolBase<FileUrlImportTool.Parameters>
 {
+    /// <summary>The tool's parameters as the request carries them (absent or ill-typed: null).</summary>
+    public sealed record Parameters(string? Url, string? FileName, string? Folder, bool? Overwrite, long? SizeBytes, string? Username, string? Password);
+
+    protected override Parameters ReadParams(ToolParameters p) => new(
+        p.Text("url"),
+        p.Text("fileName"),
+        p.Text("folder"),
+        p.Flag("overwrite"),
+        p.WholeNumber("sizeBytes"),
+        p.Text("username"),
+        p.Text("password"));
+
     private static readonly JsonDocument Schema = JsonDocument.Parse(
         """
         {
@@ -52,274 +61,144 @@ public sealed class FileUrlImportTool : IHeavyTool
         }
         """);
 
-    private readonly GuardedHttpDownloader _downloader;
-    private readonly SsrfGuard _ssrfGuard;
-    private readonly IImportCredentialProtector _protector;
-    private readonly IServiceScopeFactory _scopeFactory;
+    private readonly FileUrlTransfer _transfer;
+    private readonly ImportCredentials _credentials;
+    private readonly TaskFileIndexer _indexer;
     private readonly ImportSettings _importSettings;
-    private readonly long _diskSafetyMarginBytes;
-    private readonly ILogger<FileUrlImportTool> _logger;
+    private readonly DatasetPathPolicy _paths;
+    private readonly IFileSystem _fs;
 
     /// <summary>
     /// Initializes a new instance of the <see cref="FileUrlImportTool"/> class.
     /// </summary>
-    /// <param name="downloader">The SSRF-hardened, budget-guarded downloader.</param>
-    /// <param name="ssrfGuard">The SSRF guard (fast pre-validation at submit time).</param>
-    /// <param name="protector">The credential protector used to decrypt the basic-auth password.</param>
-    /// <param name="scopeFactory">Scope factory for per-execution scoped services.</param>
-    /// <param name="appSettings">The application settings.</param>
-    /// <param name="logger">The logger.</param>
+    /// <param name="transfer">Downloads the file into place (it also pre-validates the host at submit time).</param>
+    /// <param name="credentials">Decrypts the basic-auth password.</param>
+    /// <param name="indexer">Indexes the imported file, queues its build and invalidates the dataset's caches.</param>
+    /// <param name="importSettings">The import settings (the extension policy).</param>
+    /// <param name="paths">The dataset path rule (destination folder and file).</param>
+    /// <param name="fs">The file system the dataset folder is read from.</param>
     public FileUrlImportTool(
-        GuardedHttpDownloader downloader,
-        SsrfGuard ssrfGuard,
-        IImportCredentialProtector protector,
-        IServiceScopeFactory scopeFactory,
-        IOptions<AppSettings> appSettings,
-        ILogger<FileUrlImportTool> logger)
+        FileUrlTransfer transfer,
+        ImportCredentials credentials,
+        TaskFileIndexer indexer,
+        IOptions<ImportSettings> importSettings,
+        DatasetPathPolicy paths,
+        IFileSystem fs)
     {
-        _downloader = downloader;
-        _ssrfGuard = ssrfGuard;
-        _protector = protector;
-        _scopeFactory = scopeFactory;
-        _importSettings = appSettings.Value.Import ?? new ImportSettings();
-        _diskSafetyMarginBytes =
-            (appSettings.Value.ProcessingPlatform ?? new ProcessingPlatformSettings()).DiskSafetyMarginBytes;
-        _logger = logger;
+        _transfer = transfer;
+        _paths = paths;
+        _credentials = credentials;
+        _indexer = indexer;
+        _importSettings = importSettings.Value;
+        _fs = fs;
     }
 
     /// <inheritdoc />
-    public string Id => "import-file";
+    public override string Id => "import-file";
 
     /// <inheritdoc />
-    public string Version => "1";
+    public override string Version => "1";
 
     /// <inheritdoc />
-    public string Title => "Import file from URL";
+    public override string Title => "Import file from URL";
 
     /// <inheritdoc />
-    public HeavyToolPermission RequiredAccess => HeavyToolPermission.Write;
+    public override HeavyToolPermission RequiredAccess => HeavyToolPermission.Write;
 
     /// <inheritdoc />
-    public bool ProducesArtifact => false;
+    public override bool ProducesArtifact => false;
 
     /// <inheritdoc />
-    public JsonDocument InputSchema => Schema;
+    public override bool AddsDatasetFiles => true;
 
     /// <inheritdoc />
-    public async Task ValidateAsync(HeavyToolRequest request, IHeavyToolValidationContext ctx, CancellationToken ct)
+    public override JsonDocument InputSchema => Schema;
+
+    /// <inheritdoc />
+    protected override async Task ValidateAsync(HeavyToolRequest request, Parameters args,
+        IHeavyToolValidationContext ctx, CancellationToken ct)
     {
-        var uri = FileImportPolicy.ParseHttpUrl(ReadString(request.Params, "url"));
+        var uri = FileImportPolicy.ParseHttpUrl(args.Url);
 
         // Fast SSRF rejection at submit time (re-validated at connect time during download).
-        await _ssrfGuard.AssertAllowedAsync(uri.Host, ct);
+        await _transfer.AssertHostAllowedAsync(uri.Host, ct);
 
-        var fileName = FileImportPolicy.SanitizeFileName(ReadString(request.Params, "fileName"));
+        var fileName = FileImportPolicy.SanitizeFileName(args.FileName);
         if (!_importSettings.IsExtensionAllowed(fileName))
             throw new ArgumentException($"Files of type '{Path.GetExtension(fileName)}' are not allowed.");
 
-        var target = BuildTargetPath(ReadString(request.Params, "folder"), fileName);
-        ValidateTarget(target);
+        var target = TargetPath(args.Folder, fileName);
 
-        var overwrite = ReadBool(request.Params, "overwrite");
-        if (!overwrite && ctx.Ddb.EntryExists(target))
-            throw new ArgumentException(
-                $"'{target}' already exists. Enable overwrite to replace it.");
+        // An existing file is replaced only when the request says so (409 otherwise, D-040); the file an
+        // earlier attempt of this task moved into place is its own
+        if (!PublishedOutputMarker.Covers(ctx.Ddb, _fs, ctx.PublishedOutput, target))
+            DatasetEntryLookup.ResolveOutput(ctx.Ddb, target, args.Overwrite == true);
     }
 
     /// <inheritdoc />
-    public HeavyToolPlan Plan(HeavyToolRequest request, IHeavyToolValidationContext ctx)
-        => new(ReadLong(request.Params, "sizeBytes"), QuotaKey: "import-file",
+    protected override IReadOnlyList<string> OutputPaths(Parameters p) => [TargetPath(p.Folder, FileImportPolicy.SanitizeFileName(p.FileName))];
+
+    /// <inheritdoc />
+    protected override string? Label(Parameters p) =>
+        "\u2192 " + TargetPath(p.Folder, FileImportPolicy.SanitizeFileName(p.FileName));
+
+    /// <inheritdoc />
+    protected override HeavyToolPlan Plan(HeavyToolRequest request, Parameters args, IHeavyToolValidationContext ctx)
+        => new(args.SizeBytes, QuotaKey: "import-file",
             DefaultFileName: null, ContentType: null);
 
     /// <inheritdoc />
-    public async Task<HeavyToolArtifact?> ExecuteAsync(
+    protected override async Task<HeavyToolArtifact?> ExecuteAsync(
         HeavyToolRequest request,
+        Parameters args,
         IHeavyToolExecutionContext ctx,
         IProgress<HeavyToolProgress> progress,
         CancellationToken ct)
     {
-        var uri = FileImportPolicy.ParseHttpUrl(ReadString(request.Params, "url"));
-        var fileName = FileImportPolicy.SanitizeFileName(ReadString(request.Params, "fileName"));
+        var uri = FileImportPolicy.ParseHttpUrl(args.Url);
+        var fileName = FileImportPolicy.SanitizeFileName(args.FileName);
 
         // Defense in depth: re-check the extension policy on the worker so a job enqueued before the
         // allow/block-list was tightened (or a crafted job) cannot import a now-disallowed type.
         if (!_importSettings.IsExtensionAllowed(fileName))
             throw new InvalidOperationException($"Files of type '{Path.GetExtension(fileName)}' are not allowed.");
 
-        var target = BuildTargetPath(ReadString(request.Params, "folder"), fileName);
-        ValidateTarget(target);
+        var target = TargetPath(args.Folder, fileName);
 
-        var overwrite = ReadBool(request.Params, "overwrite");
-        if (!overwrite && ctx.Ddb.EntryExists(target))
-            throw new InvalidOperationException($"'{target}' already exists.");
-
-        var username = ReadString(request.Params, "username");
-        var password = DecryptPassword(ReadString(request.Params, "password"));
-        var cap = _importSettings.EffectiveFileImportCapBytes();
-
-        // Scratch file lives OUTSIDE the dataset folder so it is never indexed.
-        var scratch = Path.Combine(Path.GetTempPath(), $"ddb-fileimport-{Guid.NewGuid():N}.part");
-
-        using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
-        var transferTimeout = _importSettings.TransferTimeoutSeconds;
-        if (transferTimeout > 0)
-            linkedCts.CancelAfter(TimeSpan.FromSeconds(transferTimeout));
-
-        progress.Report(new HeavyToolProgress(-1, "downloading",
-            LogChunk: $"Downloading {fileName} from {uri.Host}"));
-
-        var sink = new CallbackProgress<FileDownloadProgress>(p =>
-            progress.Report(new HeavyToolProgress(p.Fraction, "downloading",
-                p.TotalBytes is > 0
-                    ? $"Downloaded {CommonUtils.GetBytesReadable(p.BytesSoFar)} / {CommonUtils.GetBytesReadable(p.TotalBytes.Value)}"
-                    : $"Downloaded {CommonUtils.GetBytesReadable(p.BytesSoFar)}")));
-
-        long downloaded;
-        try
+        var published = ctx.PublishedOutput;
+        if (PublishedOutputMarker.Covers(ctx.Ddb, _fs, published, target))
         {
-            downloaded = await _downloader.DownloadAsync(uri, scratch, username, password,
-                cap, _importSettings.MinDownloadSpeedBytesPerSec, _importSettings.LowSpeedGraceSeconds,
-                _diskSafetyMarginBytes, sink, linkedCts.Token);
-        }
-        catch (OperationCanceledException)
-            when (transferTimeout > 0 && linkedCts.IsCancellationRequested && !ct.IsCancellationRequested)
-        {
-            TryDelete(scratch);
-            throw new TimeoutException(
-                $"The download exceeded the configured transfer timeout of {transferTimeout}s.");
-        }
-        catch
-        {
-            TryDelete(scratch);
-            throw;
-        }
-
-        try
-        {
-            var localTarget = ctx.Ddb.GetLocalPath(target);
-            var parent = Path.GetDirectoryName(localTarget);
-            if (!string.IsNullOrEmpty(parent))
-                Directory.CreateDirectory(parent);
-
+            // An earlier attempt moved the file into place and failed after it: index it, never download it again
+            target = published!;
             progress.Report(new HeavyToolProgress(-1, "indexing",
-                LogChunk: $"Adding {fileName} ({CommonUtils.GetBytesReadable(downloaded)}) to the dataset"));
-
-            // Overwrite was already validated above; move the scratch file into place.
-            File.Move(scratch, localTarget, overwrite: true);
-            scratch = string.Empty; // moved: nothing to clean up
-
-            ctx.Ddb.AddRaw(target);
+                LogChunk: $"'{target}' was imported by an earlier attempt"));
         }
-        catch
+        else
         {
-            TryDelete(scratch);
-            throw;
+            // Checked again on the worker: a file may have appeared since the submit. A name that differs only in
+            // letter case is the existing file (D-040)
+            target = DatasetEntryLookup.ResolveOutput(ctx.Ddb, target, args.Overwrite == true);
+            await _transfer.DownloadIntoPlaceAsync(new FileUrlDownload(uri, fileName, target, args.Overwrite == true,
+                args.Username, DecryptPassword(args.Password)), request.OrgSlug, ctx, progress, ct);
         }
 
-        // Enqueue a build job when the imported file is buildable (mirrors ObjectsManager.AddNew).
-        try
-        {
-            if (ctx.Ddb.IsBuildable(target))
-            {
-                using var scope = _scopeFactory.CreateScope();
-                var processor = scope.ServiceProvider.GetRequiredService<IBackgroundJobsProcessor>();
-                var entry = ctx.Ddb.GetEntry(target);
-                var meta = new IndexPayload(
-                    request.OrgSlug, request.DsSlug, entry?.Hash, null,
-                    Path: target, ParentJobId: ctx.TaskId);
-
-                Expression<Action> buildJob = () => HangfireUtils.BuildWrapper(ctx.Ddb, target, false, null);
-                processor.EnqueueIndexed(buildJob, meta);
-                _logger.LogInformation("Enqueued build job for imported file '{Path}' in {Org}/{Ds}",
-                    target, request.OrgSlug, request.DsSlug);
-            }
-        }
-        catch (Exception ex)
-        {
-            _logger.LogWarning(ex, "Could not enqueue build job for imported file '{Path}'", target);
-        }
-
-        // Invalidate cached tiles/thumbnails/OGC (no auth needed; keyed by org/ds).
-        try
-        {
-            using var scope = _scopeFactory.CreateScope();
-            var cacheInvalidator = scope.ServiceProvider.GetRequiredService<IDatasetCacheInvalidator>();
-            await cacheInvalidator.InvalidateAllDatasetCachesAsync(request.OrgSlug, request.DsSlug);
-        }
-        catch (Exception ex)
-        {
-            _logger.LogWarning(ex, "Cache invalidation after file import failed for {Org}/{Ds}",
-                request.OrgSlug, request.DsSlug);
-        }
+        // Index it, queue its build when libddb reports it buildable (a child of the task), invalidate the
+        // dataset's caches: what every task that wrote files does (TaskFileIndexer)
+        await _indexer.IndexAsync(new TaskFiles(ctx.Ddb, ctx.Dataset, request.OrgSlug, request.DsSlug, [target],
+            ctx.BuildQueue, ctx.TaskId, "imported file"), progress, ct);
 
         progress.Report(new HeavyToolProgress(1, "done", LogChunk: $"Imported {target}"));
         return null;
     }
 
-    // Combines an optional folder with the (already sanitized) file name into a forward-slash
-    // relative path.
-    private static string BuildTargetPath(string? folder, string fileName)
+    // The dataset path of the (already sanitized) file name in the optional folder: libddb's path
+    // rule on the whole path, so a reserved result (the root ".uploads", any ".ddb") is refused
+    private string TargetPath(string? folder, string fileName)
     {
-        var f = (folder ?? string.Empty).Replace('\\', '/').Trim().Trim('/');
-        return string.IsNullOrEmpty(f) ? fileName : $"{f}/{fileName}";
+        var f = _paths.NormalizeFolder(folder);
+        return _paths.Normalize(f.Length == 0 ? fileName : $"{f}/{fileName}", "destination path");
     }
 
-    // Rejects rooted paths, ".." traversal and the reserved .ddb folder.
-    private static void ValidateTarget(string target)
-    {
-        if (string.IsNullOrWhiteSpace(target) || Path.IsPathRooted(target))
-            throw new ArgumentException("Invalid destination path.");
-
-        if (target.Split('/').Any(s => s is "." or ".."))
-            throw new ArgumentException("Invalid destination path.");
-
-        if (target.Equals(IDDB.DatabaseFolderName, StringComparison.OrdinalIgnoreCase) ||
-            target.StartsWith(IDDB.DatabaseFolderName + "/", StringComparison.OrdinalIgnoreCase))
-            throw new ArgumentException($"'{IDDB.DatabaseFolderName}' is a reserved folder name.");
-    }
-
-    private string DecryptPassword(string? raw)
-    {
-        if (string.IsNullOrEmpty(raw)) return string.Empty;
-        return raw.StartsWith("ENC:", StringComparison.Ordinal) ? _protector.Unprotect(raw[4..]) : raw;
-    }
-
-    private void TryDelete(string path)
-    {
-        if (string.IsNullOrEmpty(path)) return;
-        try
-        {
-            if (File.Exists(path)) File.Delete(path);
-        }
-        catch (Exception ex)
-        {
-            _logger.LogWarning(ex, "Could not delete file-import scratch file '{Path}'", path);
-        }
-    }
-
-    private static string? ReadString(JsonElement obj, string name)
-    {
-        if (obj.ValueKind != JsonValueKind.Object) return null;
-        if (!obj.TryGetProperty(name, out var el)) return null;
-        return el.ValueKind == JsonValueKind.String ? el.GetString() : null;
-    }
-
-    private static bool ReadBool(JsonElement obj, string name)
-    {
-        if (obj.ValueKind != JsonValueKind.Object) return false;
-        if (!obj.TryGetProperty(name, out var el)) return false;
-        return el.ValueKind == JsonValueKind.True;
-    }
-
-    private static long? ReadLong(JsonElement obj, string name)
-    {
-        if (obj.ValueKind != JsonValueKind.Object) return null;
-        if (!obj.TryGetProperty(name, out var el)) return null;
-        return el.ValueKind == JsonValueKind.Number && el.TryGetInt64(out var v) ? v : null;
-    }
-
-    private sealed class CallbackProgress<T>(Action<T> callback) : IProgress<T>
-    {
-        public void Report(T value) => callback(value);
-    }
+    private string DecryptPassword(string? raw) =>
+        string.IsNullOrEmpty(raw) ? string.Empty : _credentials.Open(raw);
 }

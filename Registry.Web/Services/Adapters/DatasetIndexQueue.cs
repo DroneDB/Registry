@@ -1,27 +1,28 @@
-#nullable enable
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
+using System.Runtime.ExceptionServices;
 using System.Threading;
 using System.Threading.Channels;
 using System.Threading.Tasks;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
-using Registry.Adapters.DroneDB;
+using Registry.Common;
 using Registry.Ports;
 using Registry.Ports.DroneDB;
 using Registry.Web.Exceptions;
 using Registry.Web.Models.Configuration;
 using Registry.Web.Services.Ports;
+using Registry.Web.Utilities;
 
 namespace Registry.Web.Services.Adapters;
 
 /// <summary>
 /// Default <see cref="IDatasetIndexQueue"/>: a per-dataset FIFO lane that coalesces concurrent
-/// <see cref="EnqueueAsync(DatasetKey,string,CancellationToken)"/> calls into a single native
-/// <see cref="IDdbIndex.AddRawBatchWithOptions"/> call. Registered as a singleton (one set of lanes
+/// <see cref="EnqueueAsync(DatasetKey,IReadOnlyList{string},CancellationToken)"/> calls into a single native
+/// <see cref="IDdbIndex.AddRawBatchWithOptions(System.Collections.Generic.IReadOnlyList{string},bool)"/> call. Registered as a singleton (one set of lanes
 /// for the whole process); resolves the scoped <see cref="IDdbManager"/> via
 /// <see cref="IServiceScopeFactory"/> once per batch, not once per file.
 /// </summary>
@@ -29,8 +30,105 @@ public sealed class DatasetIndexQueue : IDatasetIndexQueue, IDisposable
 {
     private sealed class IndexRequest
     {
-        public required string Path { get; init; }
+        public required AddItem Item { get; init; }
+        public string Path => Item.Path;
         public required TaskCompletionSource<Entry> Tcs { get; init; }
+
+        /// <summary>Enqueued by an upload registered with <see cref="BeginUpload"/>.</summary>
+        public bool Tracked { get; init; }
+
+        private const int Waiting = 0, InBatch = 1, Dropped = 2;
+        private int _state;
+
+        /// <summary>
+        /// Taken into a native batch (by the drain loop, right before the batch is written): from now on the
+        /// request is applied or fails there, it can no longer be dropped. False when the caller dropped it.
+        /// </summary>
+        public bool TryTake() => Interlocked.CompareExchange(ref _state, InBatch, Waiting) == Waiting;
+
+        /// <summary>
+        /// Given up by its caller before a batch took it: it is never applied (the drain loop skips it) and its
+        /// task is canceled. False when a batch already took it.
+        /// </summary>
+        public bool TryDrop()
+        {
+            if (Interlocked.CompareExchange(ref _state, Dropped, Waiting) != Waiting)
+                return false;
+            Tcs.TrySetCanceled();
+            return true;
+        }
+
+        private readonly Lock _gate = new();
+        private LateSettlement? _settlement;
+
+        /// <summary>
+        /// Makes <paramref name="settlement"/> wait for the outcome of this request, which a batch took. False when the
+        /// outcome is already known (nothing to wait for).
+        /// </summary>
+        public bool AwaitOutcome(LateSettlement settlement)
+        {
+            // Under the gate, as TakeSettlement: the batch completes the task before it asks, so either this call sees
+            // the outcome or the batch finds the settlement
+            lock (_gate)
+            {
+                if (Tcs.Task.IsCompleted)
+                    return false;
+                _settlement = settlement;
+                settlement.Expect();
+                return true;
+            }
+        }
+
+        /// <summary>Called by the batch after it completed the task: the settlement waiting for it, or null.</summary>
+        public LateSettlement? TakeSettlement()
+        {
+            lock (_gate)
+            {
+                var settlement = _settlement;
+                _settlement = null;
+                return settlement;
+            }
+        }
+    }
+
+    /// <summary>
+    /// The outcome of an item whose caller stopped waiting while batches were writing its requests: told to the
+    /// caller's <see cref="LateIndexOutcome"/> by the batch that completes the last of them.
+    /// </summary>
+    private sealed class LateSettlement(int item, IReadOnlyList<IndexRequest> taken, LateIndexOutcome observer)
+    {
+        // The hold of the caller until every request is attached (Seal), then one per request still being written
+        private int _open = 1;
+
+        /// <summary>One more request to wait for.</summary>
+        public void Expect() => Interlocked.Increment(ref _open);
+
+        /// <summary>Ends the attaching: true when a batch will tell the outcome, false when it is known already.</summary>
+        public bool Seal() => Interlocked.Decrement(ref _open) > 0;
+
+        /// <summary>A request it waited for completed: true for the last one, whose batch tells the outcome.</summary>
+        public bool Completed() => Interlocked.Decrement(ref _open) == 0;
+
+        public void Tell(ILogger logger) =>
+            BestEffort.Run(() => observer(item, FinalOutcome(taken)!.Value),
+                ex => logger.LogError(ex, "Dataset index queue: the late outcome of item {Item} could not be applied",
+                    item));
+    }
+
+    /// <summary>
+    /// What became of an item once its requests that batches took (<paramref name="taken"/>, the latest last) are
+    /// complete: its entry when one was applied, else the error of the latest; null when none was taken.
+    /// </summary>
+    private static IndexOutcome? FinalOutcome(IReadOnlyList<IndexRequest> taken)
+    {
+        if (taken.FirstOrDefault(r => r.Tcs.Task.IsCompletedSuccessfully) is { } applied)
+            return new IndexOutcome(applied.Tcs.Task.Result, null);
+        if (taken.Count == 0)
+            return null;
+
+        var latest = taken[^1].Tcs.Task;
+        return new IndexOutcome(null, latest.Exception?.InnerException ?? latest.Exception ??
+                                      (Exception)new OperationCanceledException("Index request canceled"));
     }
 
     private sealed class DatasetLane
@@ -46,24 +144,62 @@ public sealed class DatasetIndexQueue : IDatasetIndexQueue, IDisposable
         /// </summary>
         public volatile bool Retired;
 
-        /// <summary>Ticks of the last enqueue activity (best-effort, for idle trimming).</summary>
-        public long LastActivityTicks;
+        /// <summary>Timestamp (<see cref="TimeProvider.GetTimestamp"/>) of the last enqueue activity (best-effort, for idle trimming).</summary>
+        public long LastActivityTimestamp;
+
+        /// <summary>Uploads registered with <see cref="BeginUpload"/> that have not enqueued yet.</summary>
+        public int Streaming;
+
+        private TaskCompletionSource _streamingChanged = NewSignal();
+
+        /// <summary>
+        /// Completes the next time <see cref="Streaming"/> drops. Read it before checking
+        /// <see cref="Streaming"/>, so a change between the check and the wait is not missed.
+        /// </summary>
+        public Task StreamingChanged => Volatile.Read(ref _streamingChanged).Task;
+
+        public void EndStreaming()
+        {
+            Interlocked.Decrement(ref Streaming);
+            Interlocked.Exchange(ref _streamingChanged, NewSignal()).TrySetResult();
+        }
+
+        private static TaskCompletionSource NewSignal() => new(TaskCreationOptions.RunContinuationsAsynchronously);
+    }
+
+    private sealed class LaneTicket(DatasetLane lane) : UploadTicket
+    {
+        public DatasetLane Lane { get; } = lane;
+        protected override void OnEnded() => Lane.EndStreaming();
     }
 
     private readonly IServiceScopeFactory _scopeFactory;
     private readonly ILogger<DatasetIndexQueue> _logger;
     private readonly IndexQueueSettings _opts;
+    private readonly TimeProvider _time;
     private readonly ConcurrentDictionary<DatasetKey, DatasetLane> _lanes = new();
     private readonly CancellationTokenSource _shutdown = new();
 
+    /// <summary>
+    /// How long <see cref="Dispose"/> waits for the batches still running, so the callers that stopped waiting for
+    /// them are told their outcome before the process ends.
+    /// </summary>
+    private readonly TimeSpan _shutdownWait;
+
     private const int MaxIdleLaneTrimSeconds = 86_400;
 
+    /// <param name="time">Clock of the batch window, the idle trim, the enqueue timeout and the
+    /// busy-retry delay; <see cref="TimeProvider.System"/> when null.</param>
+    /// <param name="shutdownWait">How long <see cref="Dispose"/> waits for the running batches;
+    /// <see cref="ShutdownTimeouts.IndexQueue"/> when null.</param>
     public DatasetIndexQueue(IServiceScopeFactory scopeFactory, ILogger<DatasetIndexQueue> logger,
-        IOptions<AppSettings> appSettings)
+        IOptions<IndexQueueSettings> settings, TimeProvider? time = null, TimeSpan? shutdownWait = null)
     {
         _scopeFactory = scopeFactory;
         _logger = logger;
-        _opts = appSettings.Value.IndexQueue ?? new IndexQueueSettings();
+        _time = time ?? TimeProvider.System;
+        _opts = settings.Value;
+        _shutdownWait = shutdownWait ?? ShutdownTimeouts.IndexQueue;
         ValidateSettings(_opts);
     }
 
@@ -92,20 +228,42 @@ public sealed class DatasetIndexQueue : IDatasetIndexQueue, IDisposable
                 nameof(o));
     }
 
-    public async Task<Entry> EnqueueAsync(DatasetKey dataset, string path, CancellationToken ct = default)
-    {
-        var results = await EnqueueAsync(dataset, [path], ct);
-        return results[0];
-    }
-
     public async Task<IReadOnlyList<Entry>> EnqueueAsync(DatasetKey dataset, IReadOnlyList<string> paths,
         CancellationToken ct = default)
     {
-        if (paths.Count == 0)
-            return [];
+        var outcomes = await EnqueueAsync(dataset, paths.Select(p => new AddItem(p)).ToArray(), null, null, ct);
 
-        using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(_opts.EnqueueTimeoutSeconds));
+        // All or nothing for path callers: the first failure in input order, as Task.WhenAll
+        foreach (var outcome in outcomes)
+            if (outcome.Error != null)
+                ExceptionDispatchInfo.Throw(outcome.Error);
+
+        return outcomes.Select(o => o.Entry!).ToArray();
+    }
+
+    public UploadTicket BeginUpload(DatasetKey dataset)
+    {
+        var lane = AcquireLane(dataset);
+        Interlocked.Increment(ref lane.Streaming);
+        Volatile.Write(ref lane.LastActivityTimestamp, _time.GetTimestamp());
+        return new LaneTicket(lane);
+    }
+
+    public async Task<IReadOnlyList<IndexOutcome>> EnqueueAsync(DatasetKey dataset, IReadOnlyList<AddItem> items,
+        UploadTicket? upload, LateIndexOutcome? late = null, CancellationToken ct = default)
+    {
+        if (items.Count == 0)
+        {
+            upload?.End();
+            return [];
+        }
+
+        using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(_opts.EnqueueTimeoutSeconds), _time);
         using var linked = CancellationTokenSource.CreateLinkedTokenSource(ct, timeout.Token, _shutdown.Token);
+
+        // Every request made for each item, on every lane it was written to (the latest last): when the caller
+        // gives up, those no batch took yet are dropped, so nothing is applied after the caller stopped waiting
+        var requests = items.Select(_ => new List<IndexRequest>(1)).ToArray();
 
         try
         {
@@ -115,17 +273,18 @@ public sealed class DatasetIndexQueue : IDatasetIndexQueue, IDisposable
                 linked.Token.ThrowIfCancellationRequested();
 
                 var lane = AcquireLane(dataset);
-                Volatile.Write(ref lane.LastActivityTicks, Environment.TickCount64);
+                Volatile.Write(ref lane.LastActivityTimestamp, _time.GetTimestamp());
 
-                var tasks = new Task<Entry>[paths.Count];
+                var tasks = new Task<Entry>[items.Count];
                 var accepted = 0;
                 try
                 {
-                    for (var i = 0; i < paths.Count; i++)
+                    for (var i = 0; i < items.Count; i++)
                     {
                         var tcs = new TaskCompletionSource<Entry>(TaskCreationOptions.RunContinuationsAsynchronously);
-                        var request = new IndexRequest { Path = paths[i], Tcs = tcs };
+                        var request = new IndexRequest { Item = items[i], Tcs = tcs, Tracked = upload != null };
                         tasks[i] = tcs.Task;
+                        requests[i].Add(request);
 
                         // Backpressure: if the lane's channel is full, this await blocks the caller
                         // (does not throw or silently drop) until room is available or the
@@ -136,35 +295,96 @@ public sealed class DatasetIndexQueue : IDatasetIndexQueue, IDisposable
                 }
                 catch (ChannelClosedException)
                 {
-                    // The lane retired mid-write. Whatever it already accepted is committed (or
-                    // failed) by the retiring drain loop, so those results are redundant: observe
-                    // them and replay the whole set on a fresh lane. Re-adding an already-committed
-                    // path is safe - the native layer reports it as unchanged.
-                    ObserveAbandoned(tasks, accepted);
+                    // The lane retired mid-write: what it accepted and no batch took yet is dropped, what a batch
+                    // took commits (or fails) there and nobody needs its result; the whole set is replayed on a
+                    // fresh lane. Re-adding an already-committed path is safe - the native layer reports it as
+                    // unchanged.
+                    for (var i = 0; i < accepted; i++)
+                        if (!requests[i][^1].TryDrop())
+                            ObserveAbandoned(tasks[i]);
                     continue;
                 }
 
+                // After the writes: the drain loop sees this upload's files before it stops waiting
+                // for it, so they commit in the same batch
+                upload?.End();
+
                 // Guard the await too, not just the channel writes: once the whole set is
                 // accepted, a stalled native batch must still respect the deadline/cancellation
-                // instead of hanging the caller. On timeout/cancel the lane keeps completing
-                // these TCSs, so observe the now-unawaited results before rethrowing.
+                // instead of hanging the caller (the catch below drops what is still waiting).
                 try
                 {
-                    return await Task.WhenAll(tasks).WaitAsync(linked.Token);
+                    await Task.WhenAll(tasks).WaitAsync(linked.Token);
                 }
-                catch (OperationCanceledException)
+                catch (Exception) when (tasks.All(t => t.IsCompleted))
                 {
-                    ObserveAbandoned(tasks, paths.Count);
-                    throw;
+                    // Item failures: reported per item below
                 }
+
+                return tasks.Select(t => t.IsCompletedSuccessfully
+                        ? new IndexOutcome(t.Result, null)
+                        : new IndexOutcome(null, t.Exception?.InnerException ?? t.Exception ??
+                            (Exception)new OperationCanceledException("Index request canceled")))
+                    .ToArray();
             }
         }
-        catch (OperationCanceledException) when (timeout.IsCancellationRequested && !ct.IsCancellationRequested)
+        catch (OperationCanceledException) when (linked.IsCancellationRequested)
         {
-            throw new TransientException(
-                $"Index write for dataset '{dataset.OrgSlug}/{dataset.InternalRef}' did not complete within " +
-                $"{_opts.EnqueueTimeoutSeconds}s");
+            upload?.End();
+            var outcomes = requests.Select((requestsOfItem, item) => GiveUp(item, requestsOfItem, late)).ToArray();
+
+            // Canceled by the caller: it waits for no outcome
+            if (ct.IsCancellationRequested)
+                throw;
+
+            // The deadline or the shutdown: each item says what became of it, so the caller knows which files the
+            // index will never list (safe to take out) and which a batch is still writing (to be left in place)
+            var unapplied = timeout.IsCancellationRequested
+                ? new TransientException(
+                    $"Index write for dataset '{dataset.OrgSlug}/{dataset.InternalRef}' did not complete within " +
+                    $"{_opts.EnqueueTimeoutSeconds}s")
+                : ShuttingDown(dataset);
+            return outcomes.Select(o => o ?? new IndexOutcome(null, unapplied)).ToArray();
         }
+    }
+
+    /// <summary>
+    /// The failure of a request the stopping queue never applies (it was never taken into a batch): a retry
+    /// reaches the next process.
+    /// </summary>
+    private static TransientException ShuttingDown(DatasetKey dataset) =>
+        new($"The index queue of dataset '{dataset.OrgSlug}/{dataset.InternalRef}' is shutting down; retry the request");
+
+    /// <summary>
+    /// What became of an item whose caller stopped waiting: its entry when a request of it was applied, the error
+    /// of its latest request a batch took when they all failed, an <see cref="IndexWritePendingException"/> while a
+    /// batch that took it is still running (<paramref name="late"/> is then told the outcome once that batch ends);
+    /// null when it was dropped before any batch took it (it is never applied). Every request no batch took is dropped
+    /// first.
+    /// </summary>
+    private static IndexOutcome? GiveUp(int item, List<IndexRequest> requestsOfItem, LateIndexOutcome? late)
+    {
+        var taken = requestsOfItem.Where(request => !request.TryDrop()).ToList();
+        if (taken.Any(r => r.Tcs.Task.IsCompletedSuccessfully))
+            return FinalOutcome(taken);
+
+        var settlement = late == null ? null : new LateSettlement(item, taken, late);
+        var pending = false;
+        foreach (var request in taken)
+        {
+            var running = settlement != null ? request.AwaitOutcome(settlement) : !request.Tcs.Task.IsCompleted;
+            if (!running)
+                continue;
+            pending = true;
+            ObserveAbandoned(request.Tcs.Task);
+        }
+
+        // Pending: a batch tells the outcome when it ends; unless every request waited for ended while they were being
+        // attached, then the outcome is known now and no batch tells it
+        if (pending && (settlement == null || settlement.Seal()))
+            return new IndexOutcome(null, new IndexWritePendingException(requestsOfItem[^1].Path));
+
+        return FinalOutcome(taken);
     }
 
     /// <summary>
@@ -186,14 +406,11 @@ public sealed class DatasetIndexQueue : IDatasetIndexQueue, IDisposable
         }
     }
 
-    // Requests handed to a lane that retired mid-write are completed by that lane, but nobody
-    // awaits them anymore; observe faults so they never surface as UnobservedTaskException.
-    private static void ObserveAbandoned(Task<Entry>[] tasks, int count)
-    {
-        for (var i = 0; i < count; i++)
-            _ = tasks[i].ContinueWith(static t => _ = t.Exception,
-                TaskContinuationOptions.OnlyOnFaulted | TaskContinuationOptions.ExecuteSynchronously);
-    }
+    // A request a batch took is completed by that batch, but nobody awaits it anymore; observe its
+    // fault so it never surfaces as UnobservedTaskException.
+    private static void ObserveAbandoned(Task<Entry> task) =>
+        _ = task.ContinueWith(static t => _ = t.Exception,
+            TaskContinuationOptions.OnlyOnFaulted | TaskContinuationOptions.ExecuteSynchronously);
 
     public void Release(DatasetKey dataset)
     {
@@ -226,7 +443,7 @@ public sealed class DatasetIndexQueue : IDatasetIndexQueue, IDisposable
             Key = key,
             Channel = channel,
             DrainLoop = Task.CompletedTask,
-            LastActivityTicks = Environment.TickCount64
+            LastActivityTimestamp = _time.GetTimestamp()
         };
         lane.DrainLoop = Task.Run(() => DrainLoopAsync(lane));
         return lane;
@@ -252,7 +469,7 @@ public sealed class DatasetIndexQueue : IDatasetIndexQueue, IDisposable
             {
                 // The wait needs a deadline, otherwise the loop parks here forever and the trim
                 // check above is never re-evaluated on a quiet dataset.
-                using var idle = new CancellationTokenSource(TimeSpan.FromSeconds(_opts.IdleLaneTrimSeconds));
+                using var idle = new CancellationTokenSource(TimeSpan.FromSeconds(_opts.IdleLaneTrimSeconds), _time);
                 using var idleLinked =
                     CancellationTokenSource.CreateLinkedTokenSource(idle.Token, _shutdown.Token);
                 try
@@ -270,22 +487,35 @@ public sealed class DatasetIndexQueue : IDatasetIndexQueue, IDisposable
                     batch.Add(first);
 
                 // Greedily coalesce whatever is already queued, then wait a short window for
-                // stragglers from other concurrently-enqueuing callers.
-                using var window = new CancellationTokenSource(_opts.BatchWindowMs);
+                // stragglers from other concurrently-enqueuing callers. A batch made only of
+                // registered uploads stops waiting as soon as no registered upload is still
+                // streaming: nothing else can arrive for it.
+                using var window = new CancellationTokenSource(TimeSpan.FromMilliseconds(_opts.BatchWindowMs), _time);
                 using var windowLinked =
                     CancellationTokenSource.CreateLinkedTokenSource(window.Token, _shutdown.Token);
+                var untracked = batch.Count(r => !r.Tracked);
                 while (batch.Count < _opts.MaxBatchSize)
                 {
                     if (reader.TryRead(out var next))
                     {
                         batch.Add(next);
+                        if (!next.Tracked) untracked++;
                         continue;
                     }
 
+                    var streamingChanged = lane.StreamingChanged;
+                    if (untracked == 0 && Volatile.Read(ref lane.Streaming) <= 0)
+                        break;
+
                     try
                     {
-                        if (!await reader.WaitToReadAsync(windowLinked.Token))
+                        var readable = reader.WaitToReadAsync(windowLinked.Token).AsTask();
+                        var woke = untracked == 0
+                            ? await Task.WhenAny(readable, streamingChanged.WaitAsync(windowLinked.Token))
+                            : readable;
+                        if (woke == readable && !await readable)
                             break;
+                        await woke; // rethrows the window's cancellation
                     }
                     catch (OperationCanceledException)
                     {
@@ -316,25 +546,13 @@ public sealed class DatasetIndexQueue : IDatasetIndexQueue, IDisposable
             if (batch.Count == 0)
                 continue;
 
-            try
-            {
-                await CommitBatchAsync(lane.Key, batch);
-            }
-            catch (Exception ex)
-            {
-                // CommitBatchAsync is expected to complete every TCS itself (success or
-                // failure). If it throws instead, treat it as a bug: fail every request in
-                // this batch rather than leaving them pending forever.
-                _logger.LogError(ex, "Dataset index queue: unhandled failure committing batch for {Org}/{Ref}",
-                    lane.Key.OrgSlug, lane.Key.InternalRef);
-                foreach (var req in batch)
-                    req.Tcs.TrySetException(ex);
-            }
+            await RunBatchAsync(lane.Key, batch, "batch");
         }
 
-        // Shutdown: fail whatever is left so callers do not hang forever.
+        // Shutdown: fail whatever is left so callers do not hang forever. No batch took these: they are never
+        // applied, and the caller may take their files out
         while (reader.TryRead(out var leftover))
-            leftover.Tcs.TrySetException(new OperationCanceledException("Index queue is shutting down"));
+            leftover.Tcs.TrySetException(ShuttingDown(lane.Key));
     }
 
     /// <summary>
@@ -344,10 +562,10 @@ public sealed class DatasetIndexQueue : IDatasetIndexQueue, IDisposable
     /// </summary>
     private async Task<bool> TryTrimIfIdleAsync(DatasetLane lane, ChannelReader<IndexRequest> reader)
     {
-        if (reader.TryPeek(out _))
-            return false; // work still queued - not idle
-        var idleMs = Environment.TickCount64 - Volatile.Read(ref lane.LastActivityTicks);
-        if (idleMs < _opts.IdleLaneTrimSeconds * 1000L)
+        if (reader.TryPeek(out _) || Volatile.Read(ref lane.Streaming) > 0)
+            return false; // work queued or announced - not idle
+        var idle = _time.GetElapsedTime(Volatile.Read(ref lane.LastActivityTimestamp));
+        if (idle < TimeSpan.FromSeconds(_opts.IdleLaneTrimSeconds))
             return false;
 
         lane.Retired = true;
@@ -364,28 +582,48 @@ public sealed class DatasetIndexQueue : IDatasetIndexQueue, IDisposable
             leftover.Add(req);
 
         if (leftover.Count > 0)
-        {
-            try
-            {
-                await CommitBatchAsync(lane.Key, leftover);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex,
-                    "Dataset index queue: unhandled failure committing retirement batch for {Org}/{Ref}",
-                    lane.Key.OrgSlug, lane.Key.InternalRef);
-                foreach (var req in leftover)
-                    req.Tcs.TrySetException(ex);
-            }
-        }
+            await RunBatchAsync(lane.Key, leftover, "retirement batch");
 
         _logger.LogDebug("Released idle index lane for {Org}/{Ref} after {IdleSec}s",
             lane.Key.OrgSlug, lane.Key.InternalRef, _opts.IdleLaneTrimSeconds);
         return true;
     }
 
+    /// <summary>
+    /// Commits <paramref name="batch"/>, then tells the callers that stopped waiting for its requests what became of
+    /// them. Told here, on the lane's own loop, before its next batch: no other write of this lane reaches the index
+    /// while they act on the outcome (a file taken out again is not indexed by a batch that starts meanwhile).
+    /// </summary>
+    private async Task RunBatchAsync(DatasetKey key, List<IndexRequest> batch, string what)
+    {
+        try
+        {
+            await CommitBatchAsync(key, batch);
+        }
+        catch (Exception ex)
+        {
+            // CommitBatchAsync is expected to complete every TCS itself (success or
+            // failure). If it throws instead, treat it as a bug: fail every request in
+            // this batch rather than leaving them pending forever.
+            _logger.LogError(ex, "Dataset index queue: unhandled failure committing {What} for {Org}/{Ref}",
+                what, key.OrgSlug, key.InternalRef);
+            foreach (var req in batch)
+                req.Tcs.TrySetException(ex);
+        }
+
+        foreach (var req in batch)
+            if (req.TakeSettlement() is { } settlement && settlement.Completed())
+                settlement.Tell(_logger);
+    }
+
     private async Task CommitBatchAsync(DatasetKey key, List<IndexRequest> batch)
     {
+        // Taken right before the native write: a request its caller dropped meanwhile (it stopped waiting and may
+        // have taken the file out again) is never applied
+        batch = batch.Where(r => r.TryTake()).ToList();
+        if (batch.Count == 0)
+            return;
+
         // Last writer wins per path within a batch: keep only each path's most recent request,
         // but complete every duplicate request's TCS with the same resulting Entry.
         var byPath = new Dictionary<string, List<IndexRequest>>();
@@ -397,6 +635,9 @@ public sealed class DatasetIndexQueue : IDatasetIndexQueue, IDisposable
         }
 
         var paths = byPath.Keys.ToList();
+        // The latest request of a path also carries the latest hash hint
+        var items = byPath.Values.Select(list => list[^1].Item).ToList();
+        var hinted = items.Any(i => i.Hint != null);
 
         using var scope = _scopeFactory.CreateScope();
         var ddbManager = scope.ServiceProvider.GetRequiredService<IDdbManager>();
@@ -407,7 +648,9 @@ public sealed class DatasetIndexQueue : IDatasetIndexQueue, IDisposable
             // Narrowed to the index role interface only - this coalescer never needs build,
             // meta, raster or analytics operations.
             IDdbIndex ddb = ddbManager.Get(key.OrgSlug, key.InternalRef);
-            result = ddb.AddRawBatchWithOptions(paths, stopOnError: false);
+            result = hinted
+                ? ddb.AddRawBatchWithOptions(items, stopOnError: false)
+                : ddb.AddRawBatchWithOptions(paths, stopOnError: false);
         }
         catch (DdbBusyException ex)
         {
@@ -419,9 +662,11 @@ public sealed class DatasetIndexQueue : IDatasetIndexQueue, IDisposable
                 key.OrgSlug, key.InternalRef);
             try
             {
-                await Task.Delay(Random.Shared.Next(50, 250));
+                await Task.Delay(TimeSpan.FromMilliseconds(Random.Shared.Next(50, 250)), _time);
                 IDdbIndex ddb = ddbManager.Get(key.OrgSlug, key.InternalRef);
-                result = ddb.AddRawBatchWithOptions(paths, stopOnError: false);
+                result = hinted
+                ? ddb.AddRawBatchWithOptions(items, stopOnError: false)
+                : ddb.AddRawBatchWithOptions(paths, stopOnError: false);
             }
             catch (Exception retryEx)
             {
@@ -490,7 +735,7 @@ public sealed class DatasetIndexQueue : IDatasetIndexQueue, IDisposable
             handled.Add(e.Path);
             if (byPath.TryGetValue(e.Path, out var requests))
                 foreach (var req in requests)
-                    req.Tcs.TrySetException(new DdbException($"[{e.Code}] {e.Message}"));
+                    req.Tcs.TrySetException(e.ToException());
         }
 
         // Completeness contract: every path must land in exactly one bucket. A path absent
@@ -509,6 +754,27 @@ public sealed class DatasetIndexQueue : IDatasetIndexQueue, IDisposable
     public void Dispose()
     {
         _shutdown.Cancel();
+
+        // A batch still running is let end within the bound, so the callers that stopped waiting for it are told its
+        // outcome before the process ends; one that outlasts it leaves its files to the reconciliation sweep
+        var running = _lanes.Values.Select(lane => lane.DrainLoop).Where(loop => !loop.IsCompleted).ToArray();
+        if (running.Length > 0 && !Task.WaitAll(running, _shutdownWait))
+            _logger.LogWarning("Dataset index queue: {Count} batch(es) still running after {Wait} at shutdown",
+                running.Count(loop => !loop.IsCompleted), _shutdownWait);
+
         _shutdown.Dispose();
     }
+}
+
+/// <summary>
+/// The caller stopped waiting while a native batch that took the file was still being written: the outcome is not
+/// known yet. The file must stay where it is until it is: the batch lists it when it commits, and the caller's
+/// <see cref="LateIndexOutcome"/> is told when that batch ends (without one, or when the process ends first, the
+/// reconciliation sweep indexes the file). Transient (HTTP 503 with <c>Retry-After</c>) for the client.
+/// </summary>
+public sealed class IndexWritePendingException(string path)
+    : TransientException($"The index write of '{path}' is still running; its outcome is not known yet")
+{
+    /// <summary>The dataset path whose index write is still running.</summary>
+    public string Path { get; } = path;
 }

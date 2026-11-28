@@ -1,0 +1,3 @@
+# Warning baseline for scripts/check-warnings.sh. Do not edit by hand:
+# run scripts/check-warnings.sh --update after removing warnings.
+# Format: <path> <code> <number of distinct locations>

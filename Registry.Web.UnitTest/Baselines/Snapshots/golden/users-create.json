@@ -1,0 +1,15 @@
+{
+  "request": "POST /users",
+  "caller": "admin",
+  "status": 200,
+  "contentType": "application/json; charset=utf-8",
+  "bodyKind": "json",
+  "body": {
+    "userName": "goldennew",
+    "email": "goldennew@example.com",
+    "roles": [],
+    "organizations": [
+      "goldennew"
+    ]
+  }
+}

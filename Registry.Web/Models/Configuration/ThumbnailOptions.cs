@@ -1,0 +1,49 @@
+using System;
+
+namespace Registry.Web.Models.Configuration;
+
+/// <summary>Thumbnails: the generator and the defaults (keys of the <c>AppSettings</c> section).</summary>
+public sealed class ThumbnailOptions : IHasConfigurationDefaults
+{
+    public const int DefaultThumbnailSizePixels = 512;
+
+    /// <summary>The largest thumbnail the server renders, in pixels: the largest step of the Hub; a larger size is served at this one.</summary>
+    public const int MaxThumbnailSizePixels = 4096;
+
+    /// <summary>
+    /// <paramref name="size"/> within <see cref="MaxThumbnailSizePixels"/>: every rendered preview (thumbnails and the
+    /// preview of a merge) takes its size here, so a request cannot make the server render an image of any size.
+    /// </summary>
+    public static int Bounded(int size) => Math.Min(size, MaxThumbnailSizePixels);
+
+    /// <summary>The dataset thumbnail candidates used when <see cref="DatasetThumbnailCandidates"/> is not set.</summary>
+    public static readonly string[] DefaultDatasetThumbnailCandidates =
+    [
+        "thumbnail.webp", "thumbnail.jpg", "thumbnail.png",
+        "cover.webp", "cover.jpg", "cover.png"
+    ];
+
+    /// <summary>Remote thumbnail generator URL (if null the local one is used).</summary>
+    public string? RemoteThumbnailGeneratorUrl { get; set; }
+
+    /// <summary>
+    /// Shared secret between the web server and the ThumbnailGenerator host (header
+    /// <c>X-Thumbnail-Token</c>). Generated on the first start when empty and stored in
+    /// <c>appsettings.json</c>; the ThumbnailGenerator host refuses to start without it.
+    /// </summary>
+    public string? ThumbnailGeneratorToken { get; set; }
+
+    /// <summary>Default thumbnail size in pixels when no size is specified.</summary>
+    public int DefaultThumbnailSize { get; set; } = DefaultThumbnailSizePixels;
+
+    /// <summary>
+    /// File names (in the dataset root) considered as dataset thumbnail candidates, in priority order;
+    /// <see cref="DefaultDatasetThumbnailCandidates"/> when not set (applied by <see cref="ApplyDefaults"/>).
+    /// </summary>
+    public string[]? DatasetThumbnailCandidates { get; set; }
+
+    /// <summary><see cref="DatasetThumbnailCandidates"/> with the default applied.</summary>
+    public string[] Candidates => ConfigurationLists.ConfiguredOrDefault(DatasetThumbnailCandidates, DefaultDatasetThumbnailCandidates);
+
+    public void ApplyDefaults() => DatasetThumbnailCandidates = Candidates;
+}

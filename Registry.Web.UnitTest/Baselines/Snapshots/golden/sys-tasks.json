@@ -1,0 +1,42 @@
+{
+  "request": "GET /sys/tasks",
+  "caller": "admin",
+  "status": 200,
+  "contentType": "application/json; charset=utf-8",
+  "bodyKind": "json",
+  "body": {
+    "items": [
+      {
+        "taskId": "golden-import-task",
+        "orgSlug": "golden-write",
+        "dsSlug": "golden-importing",
+        "toolId": "import-dataset",
+        "version": "1",
+        "state": "Processing",
+        "progressPercent": 40,
+        "phaseMessage": null,
+        "createdAt": "<datetime:Z>",
+        "startedAt": null,
+        "finishedAt": null,
+        "path": null,
+        "userId": null,
+        "owner": null,
+        "errorType": null,
+        "error": null,
+        "artifactExpiresAt": null,
+        "waitingForFiles": false,
+        "missingFiles": null,
+        "targetLabel": null,
+        "actions": [
+          "viewLog",
+          "cancel"
+        ],
+        "waitingForNode": false,
+        "cancelledBy": null
+      }
+    ],
+    "total": 1,
+    "skip": 0,
+    "take": 50
+  }
+}

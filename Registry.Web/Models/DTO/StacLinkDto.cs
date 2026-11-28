@@ -1,24 +1,27 @@
-﻿using Newtonsoft.Json;
+using System.Text.Json.Serialization;
 
 namespace Registry.Web.Models.DTO;
 
 public class StacLinkDto
 {
     // href rel title
-    [JsonProperty("href")]
-    public string Href { get; set; }
+    [JsonPropertyName("href")]
+    public string? Href { get; set; }
 
-    [JsonProperty("rel")]
-    public string Relationship { get; set; }
+    [JsonPropertyName("rel")]
+    public string? Relationship { get; set; }
 
-    [JsonProperty("type", NullValueHandling = NullValueHandling.Ignore)]
-    public string Type { get; set; }
+    [JsonPropertyName("type")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? Type { get; set; }
 
-    [JsonProperty("title", NullValueHandling = NullValueHandling.Ignore)]
-    public string Title { get; set; }
+    [JsonPropertyName("title")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? Title { get; set; }
 
-    [JsonProperty("method", NullValueHandling = NullValueHandling.Ignore)]
-    public string Method { get; set; }
+    [JsonPropertyName("method")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? Method { get; set; }
 }
 
 

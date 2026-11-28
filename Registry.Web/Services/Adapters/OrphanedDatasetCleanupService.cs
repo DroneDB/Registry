@@ -1,17 +1,18 @@
-#nullable enable
 using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Threading;
 using System.Threading.Tasks;
 using Hangfire;
-using Hangfire.Console;
 using Hangfire.Server;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
+using Registry.Ports;
 using Registry.Web.Data;
 using Registry.Web.Models.Configuration;
+using Registry.Web.Services.Jobs;
 
 namespace Registry.Web.Services.Adapters;
 
@@ -19,45 +20,54 @@ namespace Registry.Web.Services.Adapters;
 /// Service for cleaning up orphaned dataset folders.
 /// Scans the datasets directory for folders that no longer have a corresponding database entry.
 /// </summary>
+/// <remarks>
+/// One run at a time across the hosts: two would delete the same folders in parallel and report
+/// each other's deletions as failures. A second run ends at once: the run in progress does the work.
+/// </remarks>
+[AutomaticRetry(Attempts = 1)]
+[OneRunAtATime]
 public class OrphanedDatasetCleanupService
 {
     private readonly RegistryContext _context;
-    private readonly AppSettings _settings;
+    private readonly StorageOptions _settings;
+    private readonly IFileSystem _fs;
     private readonly ILogger<OrphanedDatasetCleanupService> _logger;
 
     public OrphanedDatasetCleanupService(
         RegistryContext context,
-        IOptions<AppSettings> settings,
+        IOptions<StorageOptions> settings,
+        IFileSystem fs,
         ILogger<OrphanedDatasetCleanupService> logger)
     {
         _context = context ?? throw new ArgumentNullException(nameof(context));
         _settings = settings?.Value ?? throw new ArgumentNullException(nameof(settings));
+        _fs = fs ?? throw new ArgumentNullException(nameof(fs));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     }
+
+    /// <summary>The job as stored by earlier releases: runs with the context's shutdown token.</summary>
+    public Task CleanupOrphanedFoldersAsync(PerformContext? context) =>
+        CleanupOrphanedFoldersAsync(context, JobCancellation.Of(context));
 
     /// <summary>
     /// Scans all organization folders and removes dataset folders that don't have a corresponding database entry.
     /// This handles cleanup for datasets that failed to delete properly (e.g., due to locked files).
     /// </summary>
     /// <param name="context">Hangfire context for logging</param>
-    [AutomaticRetry(Attempts = 1)]
-    public async Task CleanupOrphanedFoldersAsync(PerformContext? context = null)
+    /// <param name="cancellationToken">Cancelled when the server shuts down: the scan stops before the next folder.</param>
+    public async Task CleanupOrphanedFoldersAsync(PerformContext? context, CancellationToken cancellationToken)
     {
-        void WriteLine(string message)
-        {
-            _logger.LogInformation(message);
-            context?.WriteLine(message);
-        }
+        var console = JobConsole.For(_logger, context);
 
         var datasetsPath = _settings.DatasetsPath;
 
-        if (string.IsNullOrWhiteSpace(datasetsPath) || !Directory.Exists(datasetsPath))
+        if (string.IsNullOrWhiteSpace(datasetsPath) || !_fs.FolderExists(datasetsPath))
         {
-            WriteLine($"Datasets path '{datasetsPath}' does not exist, skipping orphaned folder cleanup");
+            console.Info("Datasets path '{DatasetsPath}' does not exist, skipping orphaned folder cleanup", datasetsPath);
             return;
         }
 
-        WriteLine($"Starting orphaned dataset folder cleanup in '{datasetsPath}'");
+        console.Info("Starting orphaned dataset folder cleanup in '{DatasetsPath}'", datasetsPath);
 
         var totalOrphaned = 0;
         var totalDeleted = 0;
@@ -68,7 +78,7 @@ public class OrphanedDatasetCleanupService
             .AsNoTracking()
             .Include(d => d.Organization)
             .Select(d => new { OrgSlug = d.Organization.Slug, d.InternalRef })
-            .ToListAsync();
+            .ToListAsync(cancellationToken);
 
         // Build a lookup of valid dataset folders (orgSlug -> set of InternalRef GUIDs)
         var validFolders = orgDatasets
@@ -78,7 +88,7 @@ public class OrphanedDatasetCleanupService
                 g => new HashSet<Guid>(g.Select(x => x.InternalRef)));
 
         // Scan each organization folder
-        foreach (var orgDir in Directory.EnumerateDirectories(datasetsPath))
+        foreach (var orgDir in _fs.EnumerateDirectories(datasetsPath))
         {
             var orgSlug = Path.GetFileName(orgDir);
 
@@ -86,8 +96,9 @@ public class OrphanedDatasetCleanupService
             var validRefs = validFolders.GetValueOrDefault(orgSlug) ?? [];
 
             // Scan dataset folders within this organization
-            foreach (var datasetDir in Directory.EnumerateDirectories(orgDir))
+            foreach (var datasetDir in _fs.EnumerateDirectories(orgDir))
             {
+                cancellationToken.ThrowIfCancellationRequested();
                 var folderName = Path.GetFileName(datasetDir);
 
                 // Check if folder name is a valid GUID
@@ -105,19 +116,18 @@ public class OrphanedDatasetCleanupService
 
                 // This is an orphaned folder
                 totalOrphaned++;
-                WriteLine($"Found orphaned folder: {datasetDir}");
+                console.Info("Found orphaned folder: {Folder}", datasetDir);
 
                 try
                 {
-                    Directory.Delete(datasetDir, recursive: true);
+                    _fs.FolderDelete(datasetDir, recursive: true);
                     totalDeleted++;
-                    WriteLine($"Deleted orphaned folder: {datasetDir}");
+                    console.Info("Deleted orphaned folder: {Folder}", datasetDir);
                 }
                 catch (Exception ex)
                 {
                     totalFailed++;
-                    _logger.LogWarning(ex, "Failed to delete orphaned folder: {FolderPath}", datasetDir);
-                    context?.WriteLine($"WARNING: Failed to delete orphaned folder {datasetDir}: {ex.Message}");
+                    console.Warning(ex, "Failed to delete orphaned folder {Folder}: {Error}", datasetDir, ex.Message);
                 }
             }
 
@@ -126,8 +136,8 @@ public class OrphanedDatasetCleanupService
             {
                 try
                 {
-                    Directory.Delete(orgDir);
-                    WriteLine($"Deleted empty organization folder: {orgDir}");
+                    _fs.FolderDelete(orgDir, recursive: false);
+                    console.Info("Deleted empty organization folder: {Folder}", orgDir);
                 }
                 catch (Exception ex)
                 {
@@ -136,11 +146,12 @@ public class OrphanedDatasetCleanupService
             }
         }
 
-        WriteLine($"Orphaned folder cleanup completed: {totalOrphaned} found, {totalDeleted} deleted, {totalFailed} failed");
+        console.Info("Orphaned folder cleanup completed: {Found} found, {Deleted} deleted, {Failed} failed",
+            totalOrphaned, totalDeleted, totalFailed);
     }
 
-    private static bool IsDirectoryEmpty(string path)
+    private bool IsDirectoryEmpty(string path)
     {
-        return !Directory.EnumerateFileSystemEntries(path).Any();
+        return !_fs.EnumerateFileSystemEntries(path).Any();
     }
 }

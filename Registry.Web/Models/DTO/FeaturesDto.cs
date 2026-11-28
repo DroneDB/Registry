@@ -1,4 +1,3 @@
-#nullable enable
 using Registry.Web.Models.Configuration;
 
 namespace Registry.Web.Models.DTO;
@@ -36,9 +35,27 @@ public class FeaturesDto
     public bool DisableAnonymousBulkDownloads { get; set; }
 
     /// <summary>
+    /// Whether the server sends e-mail (<c>AppSettings:Smtp:Enabled</c>). Clients hide or disable what needs e-mail
+    /// (invitations, notifications, password reset by e-mail) when it is false: the server would drop the e-mail.
+    /// </summary>
+    public bool EmailEnabled { get; set; }
+
+    /// <summary>
     /// Password complexity policy. Null when no policy is enforced.
     /// </summary>
     public PasswordPolicyDto? PasswordPolicy { get; set; }
+
+    /// <summary>
+    /// The input rules a client checks before it submits a form (slugs, e-mail, entry names, the "already exists"
+    /// message, cron words, the Latin letter rule of names). The server check stays the authority.
+    /// </summary>
+    public InputRulesDto? InputRules { get; set; }
+
+    /// <summary>
+    /// The roles the server depends on (<c>admin</c>, <c>deactivated</c>): they cannot be deleted, and only the
+    /// disable and enable endpoints add or remove <c>deactivated</c>.
+    /// </summary>
+    public string[]? SystemRoles { get; set; }
 
     /// <summary>
     /// File names (in dataset root) considered as dataset thumbnail candidates.
@@ -50,6 +67,20 @@ public class FeaturesDto
     /// Clients use this to disable the export button when the estimated output exceeds the limit.
     /// </summary>
     public long? MaxExportSizeBytes { get; set; }
+
+    /// <summary>
+    /// Whether a raster export takes a window (the <c>bbox</c> of the <c>raster-export</c> task, FR-RAS-16): always true,
+    /// the libddb the Registry runs (2.4) exports one. A Hub that reads a server without this field (an older server) shows
+    /// 'Export visible extent' disabled with its reason (FR-XC-22).
+    /// </summary>
+    public bool RasterExportWindow { get; set; } = true;
+
+    /// <summary>
+    /// The largest coverage, in pixels on its longest side, that a WCS GetCoverage returns (FR-SHR-02, D-029). The
+    /// Hub sizes the sample GetCoverage URL of the Share dialog within it; a Hub that reads a server without this
+    /// field uses 4096.
+    /// </summary>
+    public int MaxWcsCoverageSizePixels { get; set; }
 
     /// <summary>
     /// Size threshold (bytes) above which an authenticated bulk download is offloaded to
@@ -70,6 +101,20 @@ public class FeaturesDto
     /// active/terminal classification and the state filter options from this list.
     /// </summary>
     public TaskStateInfoDto[]? TaskStates { get; set; }
+
+    /// <summary>
+    /// The entry types libddb knows and what it does with each (<c>DDBGetEntryTypes</c>, passed through in libddb's
+    /// order; Registry has no type rules of its own). Clients derive which entries build, which have a thumbnail and
+    /// which extensions are sidecars from this list instead of hardcoding them.
+    /// </summary>
+    public EntryTypeDto[]? EntryTypes { get; set; }
+
+    /// <summary>
+    /// The archive file name suffixes Registry's own extraction accepts: lowercase, without the leading dot,
+    /// compound ones (<c>tar.gz</c>) before their own suffixes (<c>gz</c>). A name that ends with one can be
+    /// extracted into a dataset.
+    /// </summary>
+    public string[]? ArchiveExtensions { get; set; }
 
     /// <summary>
     /// Hub UI branding and customization options. Materializes <c>window.HubOptions</c>
@@ -95,6 +140,18 @@ public class FeaturesDto
     /// Native DroneDB library version. Surfaced for the post-update notice dialog.
     /// </summary>
     public string? DdbVersion { get; set; }
+
+    /// <summary>
+    /// Whether the update check runs (<c>AppSettings:UpdateCheckCron</c> is not disabled). Clients do not ask for the
+    /// update information when it is false.
+    /// </summary>
+    public bool UpdateCheckEnabled { get; set; }
+
+    /// <summary>
+    /// Proves that this deployment is the one with a given instance id, without revealing the id: lowercase hex SHA-256
+    /// of <c>ddb-instance-v1:</c> and the lowercase instance id.
+    /// </summary>
+    public string? InstanceHash { get; set; }
 }
 
 /// <summary>
@@ -113,6 +170,23 @@ public sealed record TaskToolInfoDto(
     bool Hidden,
     bool Disabled,
     string? DisabledMessage);
+
+/// <summary>
+/// An entry type as libddb describes it (<c>DDBGetEntryTypes</c>).
+/// </summary>
+/// <param name="Id">libddb's numeric id of the type (the <c>type</c> of an entry).</param>
+/// <param name="Name">Its name, as <c>DDBRescan</c> takes it.</param>
+/// <param name="Buildable">libddb builds entries of the type.</param>
+/// <param name="Thumbnail"><c>none</c>, <c>file</c> (rendered from the entry's file) or <c>build</c> (from an artifact once built).</param>
+/// <param name="SidecarExtensions">Lowercase extensions, without the dot, of the files that belong to a main file of the type.</param>
+/// <param name="Roles">The artifact roles a build of the type can produce.</param>
+public sealed record EntryTypeDto(
+    int Id,
+    string Name,
+    bool Buildable,
+    string Thumbnail,
+    string[] SidecarExtensions,
+    string[] Roles);
 
 /// <summary>
 /// Authoritative descriptor of a task state (value + terminal flag), surfaced to

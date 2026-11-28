@@ -1,0 +1,54 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "libddb pending builds",
+  "description": "DDBGetPendingBuildInfo",
+  "type": "array",
+  "items": {
+    "type": "object",
+    "required": [
+      "hash",
+      "key",
+      "path",
+      "missingDependencies",
+      "lastAttempt",
+      "retryAfter",
+      "awaitingFiles"
+    ],
+    "additionalProperties": false,
+    "properties": {
+      "hash": {
+        "type": "string",
+        "pattern": "^[0-9a-f]{64}$"
+      },
+      "key": {
+        "type": "string",
+        "pattern": "^[0-9a-f]{64}(-[0-9a-f]{16})?$",
+        "description": "The build key of the entry (build_layout.h buildKey): the hash, or the hash and the digest of the georeference of a model or a splat that has one. The marker is the entry's: a copy of the file in another folder has its own"
+      },
+      "path": {
+        "type": "string"
+      },
+      "missingDependencies": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        },
+        "description": "Dataset-relative names"
+      },
+      "lastAttempt": {
+        "type": "integer",
+        "minimum": 0,
+        "description": "Unix epoch seconds (integer)"
+      },
+      "retryAfter": {
+        "type": "integer",
+        "minimum": 0,
+        "description": "When DDBBuild with pendingOnly (and no force) retries the build: lastAttempt + libddb's retry backoff, Unix epoch seconds (integer); due when now >= retryAfter. Applies only when awaitingFiles is false"
+      },
+      "awaitingFiles": {
+        "type": "boolean",
+        "description": "missingDependencies is not empty: no timer retries the build; adding a file of one of those names releases it (then false, due at once)"
+      }
+    }
+  }
+}

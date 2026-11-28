@@ -1,43 +1,31 @@
-#nullable enable
 using System;
 using Hangfire.Server;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Registry.Web.Services.HeavyTasks.Adapters;
+using Registry.Web.Services.Jobs;
 using Registry.Web.Services.Ports;
 
 namespace Registry.Web.Filters;
 
 /// <summary>
 /// Hangfire server filter that captures the console output of build/maintenance
-/// jobs (BuildWrapper, BuildPendingWrapper, CleanupWrapper, MaskBordersWrapper)
-/// into a per-job <see cref="LogRingBuffer"/> and persists it to
+/// jobs (<see cref="DdbJobKind.Build"/>, <see cref="DdbJobKind.RebuildInBackground"/>, <see cref="DdbJobKind.BuildPending"/>,
+/// <see cref="DdbJobKind.Cleanup"/>, <see cref="DdbJobKind.MaskBorders"/>) into a per-job <see cref="LogRingBuffer"/> and persists it to
 /// <c>JobIndex.LogTailJson</c> when the job finishes. This makes the Task
 /// History "View log" dialog show build logs the same way it already shows
 /// heavy-task logs (which persist their own tail via HangfireProgressSink).
 /// </summary>
 public sealed class BuildLogCaptureFilter(
-    IServiceProvider sp,
+    IServiceScopeFactory scopes,
     ILogger<BuildLogCaptureFilter> log) : IServerFilter
 {
     /// <summary>Key under which the active job's log buffer is stored in <c>PerformContext.Items</c>.</summary>
     public const string BufferKey = "JobLogBuffer";
 
-    private static readonly string[] CapturedMethods =
-    [
-        nameof(Utilities.HangfireUtils.BuildWrapper),
-        nameof(Utilities.HangfireUtils.BuildPendingWrapper),
-        nameof(Utilities.HangfireUtils.CleanupWrapper),
-        nameof(Utilities.HangfireUtils.MaskBordersWrapper)
-    ];
-
     public void OnPerforming(PerformingContext context)
     {
-        var methodName = context.BackgroundJob?.Job?.Method?.Name;
-        if (string.IsNullOrEmpty(methodName))
-            return;
-
-        if (Array.IndexOf(CapturedMethods, methodName) < 0)
+        if (DdbJobDescriptor.Of(context.BackgroundJob?.Job) is not { Kind: not DdbJobKind.GenerateThumbnail })
             return;
 
         // The job retrieves this buffer from context.Items and appends each
@@ -60,7 +48,7 @@ public sealed class BuildLogCaptureFilter(
             lock (buffer)
                 logTailJson = buffer.ToJson();
 
-            using var scope = sp.CreateScope();
+            using var scope = scopes.CreateScope();
             var writer = scope.ServiceProvider.GetRequiredService<IJobIndexWriter>();
             writer.UpdateProgressAsync(jobId, null, null, logTailJson, DateTime.UtcNow)
                 .GetAwaiter().GetResult();

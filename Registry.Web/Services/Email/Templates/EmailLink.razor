@@ -1,0 +1,26 @@
+@*
+    A link in an e-mail body, in the accent of the instance. Only an http(s) address is written as a link: a template
+    never puts a javascript: or data: address in an href.
+*@
+@if (EmailLinks.IsWebUrl(Href))
+{
+    <a href="@Href" style="color:@Branding.LinkColor;text-decoration:underline;">@ChildContent</a>
+}
+else
+{
+    @ChildContent
+}
+
+@code {
+    /// <summary>The address; not a link unless it is an absolute http or https address.</summary>
+    [Parameter, EditorRequired]
+    public Uri Href { get; set; }
+
+    /// <summary>The accent of the instance.</summary>
+    [Parameter, EditorRequired]
+    public EmailBranding Branding { get; set; }
+
+    /// <summary>The text of the link.</summary>
+    [Parameter, EditorRequired]
+    public RenderFragment ChildContent { get; set; }
+}

@@ -1,4 +1,3 @@
-#nullable enable
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -15,6 +14,13 @@ public interface IArchiveExtractor
 {
     /// <summary>True when the file name maps to a supported archive format.</summary>
     bool IsSupported(string fileName);
+
+    /// <summary>
+    /// The file name suffixes <see cref="IsSupported"/> accepts: lowercase, with the leading dot, compound ones
+    /// (<c>.tar.gz</c>) before their own suffixes (<c>.gz</c>). The one rule of "what Registry extracts", for whoever
+    /// has to name it (the features the Hub reads).
+    /// </summary>
+    IReadOnlyList<string> SupportedExtensions { get; }
 
     /// <summary>
     /// Content-based validation that the file at <paramref name="filePath"/> is an actual supported
@@ -39,24 +45,6 @@ public interface IArchiveExtractor
 /// </summary>
 public interface IArchiveReadSession : IDisposable
 {
-    /// <summary>Number of non-directory entries (used to compute progress).</summary>
-    /// <remarks>
-    /// For compressed tarballs this triggers a full decompression pass to count the
-    /// entries. Prefer <see cref="FastFileEntryCount"/> when an exact count is not
-    /// required and the decompression cost must be avoided.
-    /// </remarks>
-    int FileEntryCount { get; }
-
-    /// <summary>
-    /// Estimated total uncompressed size in bytes (used for the quota / disk-space
-    /// / decompression-bomb guard). Null when the format does not expose it cheaply.
-    /// </summary>
-    /// <remarks>
-    /// For compressed tarballs this triggers a full decompression pass. Prefer
-    /// <see cref="FastUncompressedBytes"/> to avoid that cost when an estimate suffices.
-    /// </remarks>
-    long? TotalUncompressedBytes { get; }
-
     /// <summary>
     /// Uncompressed size in bytes when it can be obtained WITHOUT decompressing the
     /// archive (random-access formats such as zip/rar/7z/tar). Null for compressed

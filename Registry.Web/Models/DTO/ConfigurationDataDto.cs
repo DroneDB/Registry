@@ -8,28 +8,28 @@ namespace Registry.Web.Models.DTO;
 public class ConfigurationDataDto
 {
     /// <summary>All configuration sections, ordered by subsystem.</summary>
-    public List<ConfigurationSectionDataDto> Sections { get; set; }
+    public List<ConfigurationSectionDataDto>? Sections { get; set; }
 }
 
 /// <summary>
-/// A logical grouping of related configuration fields (e.g., "Auth & Security", "LDAP").
+/// A logical grouping of related configuration fields (e.g., "Auth &amp; Security", "LDAP").
 /// </summary>
 public class ConfigurationSectionDataDto
 {
     /// <summary>Section key used for JSON nesting (e.g., "Auth", "Storage", "Cache").</summary>
-    public string Name { get; set; }
+    public string? Name { get; set; }
 
-    /// <summary>Display title shown in the UI (e.g., "Authentication & Security").</summary>
-    public string Title { get; set; }
+    /// <summary>Display title shown in the UI (e.g., "Authentication &amp; Security").</summary>
+    public string? Title { get; set; }
 
     /// <summary>Short description of what this section controls.</summary>
-    public string Description { get; set; }
+    public string? Description { get; set; }
 
     /// <summary>True if at least one field differs from default or is explicitly configured.</summary>
     public bool IsActive { get; set; }
 
     /// <summary>Fields belonging to this section.</summary>
-    public List<ConfigurationFieldDataDto> Fields { get; set; }
+    public List<ConfigurationFieldDataDto>? Fields { get; set; }
 }
 
 /// <summary>
@@ -38,10 +38,10 @@ public class ConfigurationSectionDataDto
 public class ConfigurationFieldDataDto
 {
     /// <summary>Field name as it appears in the JSON config (e.g., "TokenExpirationInDays").</summary>
-    public string Key { get; set; }
+    public string? Key { get; set; }
 
     /// <summary>Human-readable display name (e.g., "Token Expiration").</summary>
-    public string DisplayName { get; set; }
+    public string? DisplayName { get; set; }
 
     /// <summary>Current value as string. Null for sensitive fields.</summary>
     public string? CurrentValue { get; set; }
@@ -53,10 +53,10 @@ public class ConfigurationFieldDataDto
     public bool IsSet { get; set; }
 
     /// <summary>Clear description of what the field does.</summary>
-    public string Description { get; set; }
+    public string? Description { get; set; }
 
-    /// <summary>Input type: "text" | "number" | "bool" | "timespan" | "cron" | "enum" | "password" | "array" | "json".</summary>
-    public string FieldType { get; set; }
+    /// <summary>Input type: "text" | "number" | "bool" | "timespan" | "cron" | "enum" | "password" | "array" | "json", or "info" for a read-only value that is not a setting.</summary>
+    public string? FieldType { get; set; }
 
     /// <summary>Possible enum values (e.g., ["Sqlite", "Mysql"]). Only set when FieldType is "enum".</summary>
     public string[]? EnumOptions { get; set; }

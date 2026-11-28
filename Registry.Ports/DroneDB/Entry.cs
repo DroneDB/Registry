@@ -1,37 +1,20 @@
-﻿using System;
 using System.Collections.Generic;
-using Newtonsoft.Json;
-using Registry.Common;
+using System.Text.Json;
+using System.Text.Json.Serialization;
+using Registry.Ports.Json;
 
 namespace Registry.Ports.DroneDB;
 
-public class Entry
+public class Entry : EntrySummary
 {
-    [JsonProperty("path")]
-    public string Path { get; set; }
+    /// <summary>Absent when the entry has no properties.</summary>
+    [JsonPropertyName("properties")]
+    [JsonConverter(typeof(SharedDocumentMapConverter))]
+    public Dictionary<string, JsonElement>? Properties { get; set; }
 
-    [JsonProperty("hash")]
-    public string Hash { get; set; }
+    [JsonPropertyName("point_geom")]
+    public JsonElement? PointGeometry { get; set; }
 
-    [JsonProperty("type")]
-    public EntryType Type { get; set; }
-
-    [JsonProperty("properties")]
-    public Dictionary<string, object> Properties { get; set; }
-
-    [JsonProperty("mtime")]
-    [JsonConverter(typeof(SecondEpochConverter))]
-    public DateTime ModifiedTime { get; set; }
-
-    [JsonProperty("size")]
-    public long Size { get; set; }
-
-    [JsonProperty("depth")]
-    public int Depth { get; set; }
-
-    [JsonProperty("point_geom")]
-    public object PointGeometry { get; set; }
-
-    [JsonProperty("polygon_geom")]
-    public object PolygonGeometry { get; set; }
+    [JsonPropertyName("polygon_geom")]
+    public JsonElement? PolygonGeometry { get; set; }
 }

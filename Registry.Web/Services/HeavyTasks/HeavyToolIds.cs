@@ -1,4 +1,3 @@
-#nullable enable
 namespace Registry.Web.Services.HeavyTasks;
 
 /// <summary>
@@ -9,4 +8,16 @@ public static class HeavyToolIds
 {
     /// <summary>Dataset build tool (matches the JobIndex.ToolId default).</summary>
     public const string Build = "build";
+
+    /// <summary>Index rescan tool.</summary>
+    public const string RescanIndex = "rescan-index";
+
+    /// <summary>Rescan of selected entries: unlike <see cref="RescanIndex"/> it does not lock the dataset.</summary>
+    public const string RescanEntries = "rescan-entries";
+
+    /// <summary>Dataset import tool: <c>ImportManager</c> creates the dataset it fills.</summary>
+    public const string ImportDataset = "import-dataset";
+
+    /// <summary>Mask Borders: the masked copy of a georaster (FR-PRC-12, D-013).</summary>
+    public const string MaskBorders = "mask-borders";
 }

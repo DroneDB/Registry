@@ -1,4 +1,3 @@
-#nullable enable
 using System.Collections.Generic;
 using System.Linq;
 using Microsoft.Extensions.Options;
@@ -15,9 +14,9 @@ public class PasswordPolicyValidator : IPasswordPolicyValidator
 {
     private readonly PasswordPolicy? _policy;
 
-    public PasswordPolicyValidator(IOptions<AppSettings> appSettings)
+    public PasswordPolicyValidator(IOptions<IdentityProviderOptions> identity)
     {
-        _policy = appSettings.Value.PasswordPolicy;
+        _policy = identity.Value.PasswordPolicy;
     }
 
     public PasswordValidationResult Validate(string? password)

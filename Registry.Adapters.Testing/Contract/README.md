@@ -1,0 +1,953 @@
+# libddb contract fixtures
+
+The JSON outputs of libddb that Registry consumes, recorded as golden fixtures with a JSON
+Schema each. They freeze today's field names, types and values: any unplanned change to one of
+these outputs fails a DroneDB test, and Registry's contract tests (`FakeDdbWrapper`) read
+the same files.
+
+Registry validates the contract on its side, against a libddb build (its `Registry.Adapters.Ddb.Test`
+suite runs against the pinned libddb in Registry's CI, and a nightly job runs it against the
+latest DroneDB artifacts). DroneDB's CI does not run Registry: it tests its own documented output,
+which is what the tests of this folder do.
+
+The fixtures record the outputs **as they are today** (libddb 1.12.2, ABI 1.0). Nothing was
+renamed or retyped for them, including the mixed casing:
+
+* `point_geom` and `polygon_geom` are snake_case; the entry `properties` keys (`captureTime`,
+  `bandCount`, ...) are camelCase; STAC keeps its own `stac_version` and `stac_extensions`.
+* `mtime` (entries and meta items), `lastAttempt` and `retryAfter` are integer Unix epoch **seconds**.
+* An image's `captureTime` is epoch **milliseconds**, written as a float (`1714972089000.0`).
+* `DDBInfo` writes `path` as `file://` + the absolute path, and `depth` as the number of folders
+  in that absolute path. `DDBGet`/`DDBList` write dataset-relative paths and depths.
+* `DDBInfo` keeps full coordinate precision; entries read back from the index (`DDBGet`,
+  `DDBList`) have point coordinates rounded to 6 decimals.
+* `DDBMetaGet`/`DDBMetaAdd` return `data` as a JSON value; `DDBMetaDump` returns it as JSON text.
+* `DDBGetRasterInfo` writes `"detectedSensor": null` for an unknown sensor,
+  `DDBGetRasterMetadata` writes `""`.
+
+## Layout
+
+| Path | Content |
+| --- | --- |
+| `inputs/` | The committed input files (byte for byte, see `.gitattributes`) |
+| `schemas/` | JSON Schemas (draft 2020-12), one per output shape |
+| `fixtures/` | One golden file per output: `<name>.json` |
+| `vectors/entry-paths.json` | The golden path vectors: input → normalized path or rejection (see [Path vectors](#path-vectors)) |
+| `check_schemas.py` | Optional cross-check with python-jsonschema |
+| `../contract_fixtures.{h,cpp}` | The test harness: normalise, validate, compare or rewrite |
+| `../json_schema_check.{h,cpp}` | The schema checker the C++ tests use |
+| `../unit/contract_test.cpp` | The offline fixtures (unit binary) |
+| `../unit/entry_path_test.cpp` | The path vectors, through `ddb::normalizeEntryPath` and `DDBNormalizePath` |
+| `../integration/contract_drone_image_test.cpp` | The drone image fixtures (downloads one asset) |
+
+## Inputs
+
+The contract dataset is a copy of `inputs/` in a test area, every file and folder with the
+modification time 1700000000 (2023-11-14T22:13:20Z), indexed with `DDBAdd`. Committed inputs
+make hashes and sizes deterministic; the fixed mtime makes entry mtimes and the STAC datetimes
+taken from them deterministic.
+
+| File | Entry type | What it is |
+| --- | --- | --- |
+| `a.txt` | 2 Generic | 31 bytes of text |
+| `cloud.las` | 5 PointCloud | 16 points, LAS 1.2 format 0, EPSG:32632 (PDAL `translate` from a CSV grid; creation date 2024-001) |
+| `layer.geojson` | 14 Vector | A polygon and a point, EPSG:4326 |
+| `ortho.tif` | 4 GeoRaster | 32x32 RGB Byte GeoTIFF, EPSG:32632, 0.5 m pixels (GDAL) |
+| `sub/img.jpg` | 3 GeoImage | 32x24 JPEG with EXIF Make/Model, GPS position and altitude, GPS date and time stamp (Pillow) |
+
+The capture time of `sub/img.jpg` comes from its GPS date/time stamp (UTC), so it does not
+depend on a time zone. The drone image fixtures use `images/DJI_0018.JPG` of DroneDB/test_data
+at the commit in `../test-data.sha` (its capture time uses the zoneinfo database that ships
+with ddb).
+
+## Fixtures
+
+| Fixture | Call | Schema | Normalised |
+| --- | --- | --- | --- |
+| `add` | `DDBAdd(<root>, [<root>/a.txt, <root>/cloud.las, <root>/layer.geojson, <root>/ortho.tif, <root>/sub], recursive=true)` | `entries` | - |
+| `list` | `DDBList(<root>, [<root>], "json", recursive=true)` | `entries` | - |
+| `list-folder` | `DDBList(<root>, [<root>/sub], "json", recursive=false)` | `entries` | - |
+| `list-entries` | `DDBListEntries(<root>, "", recursive=true, "", "", withDetails=true)` | `entries` | - |
+| `list-entry-summaries` | `DDBListEntries(<root>, "", recursive=true, "", "", withDetails=false)` | `entry-summaries` | - |
+| `list-entries-filtered` | `DDBListEntries(<root>, "", recursive=true, "*.TIF", "georaster,image", withDetails=false)` | `entry-summaries` | - |
+| `get-image`, `get-folder` | `DDBGet(<root>, "sub/img.jpg")`, `DDBGet(<root>, "sub")` | `entry` | - |
+| `info-generic`, `info-georaster`, `info-image`, `info-pointcloud`, `info-vector` | `DDBInfo([<root>/<file>], "json", withHash=true)` | `entries` | `depth` |
+| `meta-add`, `meta-set`, `meta-get` | `DDBMetaAdd`, `DDBMetaSet`, `DDBMetaGet` of a singular key | `meta-item` | `id`, `mtime` |
+| `meta-get-list` | `DDBMetaGet(<root>, "", "tags")` (a key ending in s holds a list) | `meta-items` | `id`, `mtime` |
+| `meta-list`, `meta-list-entry` | `DDBMetaList(<root>, "")`, `DDBMetaList(<root>, "sub/img.jpg")` | `meta-list` | - |
+| `meta-dump` | `DDBMetaDump(<root>, "[]")` | `meta-dump` | `id`, `mtime`; sorted by path, key, data |
+| `meta-unset`, `meta-remove` | `DDBMetaUnset`, `DDBMetaRemove` | `meta-count` | - |
+| `build-status` | `DDBBuild(<root>, "ortho.tif")`, then `DDBGetBuildStatus` of a built, a buildable, a non-buildable and a missing path | `build-status` | - |
+| `pending-build-info-none` | `DDBGetPendingBuildInfo(<root>)`, nothing pending | `pending-build-info` | - |
+| `pending-build-info` | A Shapefile without `.shx`/`.dbf`: `DDBBuild` returns `DDBERR_BUILDDEPMISSING`, then `DDBGetPendingBuildInfo` | `pending-build-info` | `lastAttempt`, `retryAfter` |
+| `stac-collection` | `DDBStac(<root>, "", <collection URL>, "contract", <catalog URL>)` | `stac-collection` | - |
+| `stac-item-georaster`, `stac-item-image` | `DDBStac(<root>, "ortho.tif" / "sub/img.jpg", ...)` | `stac-item` | - |
+| `stac-item-collection` | `DDBStacItemCollection(<root>, ..., limit=10, offset=0)` | `stac-item-collection` | - |
+| `stac-data-collection` | `DDBStacData(<root>, NULL)`: data only (see [Data-only STAC](#data-only-stac)) | `stac-data-collection` | - |
+| `stac-data-item-georaster`, `stac-data-item-image` | `DDBStacData(<root>, "ortho.tif" / "sub/img.jpg")` | `stac-data-item` | - |
+| `stac-data-item-collection` | `DDBStacItemCollectionData(<root>, "", "", limit=10, offset=0)` | `stac-data-item-collection` | - |
+| `raster-info` | `DDBGetRasterInfo(<root>/ortho.tif)` | `raster-info` | - |
+| `raster-metadata` | `DDBGetRasterMetadata(<root>/ortho.tif, NULL, NULL)`: per-band statistics | `raster-metadata` | - |
+| `raster-metadata-formula` | `DDBGetRasterMetadata(<root>/ortho.tif, "VARI", "RGB")`: formula statistics and histogram | `raster-metadata` | - |
+| `build-artifacts` | `DDBBuild(<root>, "ortho.tif")`, then `DDBGetBuildArtifacts` of a built (COG), two buildable and not built, a non-buildable file, a folder and a missing path (see [Build manifest](#build-manifest)) | `build-artifacts` | - |
+| `build-artifacts-pointcloud` | `DDBBuild(<root>, "cloud.las")`, then `DDBGetBuildArtifacts(<root>, ["cloud.las"])`: the `crs` of the `pointcloud.copc` artifact (see [Build manifest](#build-manifest)) | `build-artifacts` | `version` |
+| `build-artifacts-pending` | The `pending-build-info` dataset (`roads.shp` deferred), then `DDBGetBuildArtifacts(<root>, ["roads.shp"])` | `build-artifacts` | `lastAttempt`, `retryAfter` |
+| `list-entries-ex` | `DDBBuild(<root>, "ortho.tif")`, then `DDBListEntriesEx(<root>, "", "", "", {recursive=true, withDetails=false, withBuild=true})` | `list-entries-ex` | - |
+| `resolve-build-file` | `DDBResolveBuildFile(<root>, <hash of ortho.tif>, "cog/cog.tif")` after its build: an object with the absolute `path` and the artifact's `mediaType` | `build-file` | - |
+| `copy-build-artifacts` | `DDBCopyBuildArtifacts(<root>, <root2>, <hash of ortho.tif>)` after its build, `<root2>` a dataset with `ortho.tif` | `copy-build-artifacts` | - |
+| `entry-types` | `DDBGetEntryTypes()` (no dataset) | `entry-types` | - |
+| `capabilities` | `DDBGetCapabilities()` (no dataset): ABI version, error codes, error reasons, cancellable exports, the symbol manifest | `capabilities` | `version` |
+| `effective-config` | `DDBConfigure({"cacheDir": <cache>, "cpuPoolSize": 3, "ioThreads": 2, "minFreeDiskMb": 256})`, then `DDBGetEffectiveConfig()` (no dataset; see `ddb.h`, "Process configuration") | `effective-config` | `hardwareThreads` |
+| `normalize-path`, `normalize-path-rejected` | `DDBNormalizePath("photos\\2024/./a.jpg", "[\".uploads\"]")`, `DDBNormalizePath(".uploads/x", "[\".uploads\"]")` (no dataset) | `normalize-path` | - |
+| `gdal-util-probe` | The response line of `gdal-util --serve` to a `probe` request (kind raster) for `ortho.tif`: the footprint, the size and the other fields the host merges into the entry (`apps/gdal-util/PROTOCOL.md`, `src/include/raster_protocol.h`). The schema also covers the vector probe and the error response. Not an output of the C API: libddb and the helper program share the shape, and the fixture is checked by `tests/unit/gdal_util_tool_test.cpp` against the real program | `gdal-util-probe` | - |
+| `info-drone-image`, `get-drone-image`, `stac-item-drone-image` | `DDBInfo`, `DDBGet`, `DDBStac` of `DJI_0018.JPG` (integration) | `entries`, `entry`, `stac-item` | `depth` (info) |
+
+Each fixture file holds:
+
+```json
+{
+  "description": "the input",
+  "call": "the libddb call, with <root> for the dataset folder",
+  "schema": "entries.schema.json",
+  "normalisation": {"placeholders": ["<root>"], "volatileKeys": ["depth"]},
+  "output": "the normalised output"
+}
+```
+
+## Data-only STAC
+
+`DDBStacData` and `DDBStacItemCollectionData` (2.0.0) return the documents of `DDBStac`
+(with `id` NULL) and `DDBStacItemCollection` without any member built from a URL or an ID, which
+Registry owns: no `id`, `collection` or `links`, and no asset `href`. Every other member is the
+same, value for value (`ContractFixtures.StacDataIsStacWithoutUrlsAndIds` compares them). A
+caller builds the rest from what is left:
+
+* an Item's entry path is `properties.title` and the key of its data asset (role `data`); the
+  `thumbnail` asset (role `thumbnail`) is there when libddb can render a thumbnail of the entry;
+* a Collection's assets are keyed by entry path; its `title` is the dataset name, else the dataset
+  folder name;
+* `DDBStacData` returns `DDBERR_NOTFOUND` for an entry that is not in the index (`DDBStac`
+  keeps returning `DDBERR_EXCEPTION`).
+
+The existing `DDBStac` and `DDBStacItemCollection` outputs are unchanged (their fixtures did not
+change).
+
+## Build manifest
+
+`DDBGetEntryTypes`, `DDBGetBuildArtifacts`, `DDBResolveBuildFile`, `DDBCopyBuildArtifacts` and
+`DDBListEntriesEx` (2.0.0) let a host serve builds without knowing their layout.
+The vocabulary and the fields are documented in `ddb.h` ("Build manifest");
+`build-artifacts.schema.json` holds the shared shapes: `$defs/build` (the build object of an
+entry, also embedded by `DDBListEntriesEx`) and `$defs/artifact`.
+
+* An artifact is identified by its `role`; its `path` is relative to the build `root` and to the
+  URL `.../build/{hash}/`. A host never composes `cog/cog.tif` itself.
+* Only artifacts that exist are listed; a directory artifact (`kind: "dir"`) exists when its
+  `index` does. A `legacy` artifact (`pointcloud.ept`) names the role it stands in for in
+  `fallbackFor` (`pointcloud.copc`) and is listed only while that role is not.
+* `mediaType` is the media type of the file a client opens: the file itself, or the index of a
+  directory (so `vector.mvt` is `application/json`, its TileJSON; the tiles are served by file
+  name). The values: `raster.cog` `image/tiff; application=geotiff; profile=cloud-optimized`,
+  `pointcloud.copc` `application/vnd.laszip+copc`, `vector.gpkg`
+  `application/geopackage+sqlite3` (the IANA registration), `model.bm3d`
+  `application/vnd.dronedb.bm3d`, `model.nexus`, `gsplat.lod`,
+  `gsplat.spz`, `gsplat.export` `application/octet-stream`, the JSON artifacts and directory indexes
+  `application/json`.
+* `downloadName` is set for the artifacts a download offers: `cog.tif`, `cloud.copc.laz`,
+  `source.gpkg`, for a Gaussian splat `model.rad` (`gsplat.lod`), `model.spz` (the legacy
+  `gsplat.spz`) and `export.spz` (`gsplat.export`), and for a Model `model.3dtiles.zip`
+  (`model.3dtiles`, a directory: a host offers it as a ZIP archive of what is in it, `tileset.json`
+  at its root). The `model.3dtiles` of a `.3tz` has none: the uploaded file is that archive.
+* `state` reads the build lock without reclaiming it (`BuildLock::isHeld`), so a listing never
+  changes the dataset.
+* `retryAfter` is the Unix second from which a pending build is retried by `DDBBuild` with
+  `pendingOnly` (and no `force`): `lastAttempt` + libddb's retry backoff (60 s). It is null exactly
+  when `lastAttempt` is, and is a time, not a "due now" flag: the retry is due when the current
+  time is at or past it. `DDBGetPendingBuildInfo` reports the same value. A host compares it with
+  its clock and keeps no copy of the backoff.
+* `awaitingFiles` is true when the pending marker lists missing files (`missingDependencies` is
+  not empty): no timer retries that build, adding one of the files releases it. It is the
+  `awaitingFiles` of `DDBGetPendingBuildInfo`, and false without a marker, so a host reads the
+  flag and does not derive it from `state` and `missingDependencies`.
+* `crs` (2.8.0) is on the `pointcloud.copc` artifact when the COPC has a CRS (the COPC of a cloud whose CRS does not
+  fit its coordinates has none):
+  `{"name": "WGS 84 / UTM zone 33N", "epsg": 32633, "transformed": true}`, the CRS of the COPC file
+  (`epsg` null for a CRS without a code: a compound CRS, a centred transverse Mercator, a 3-D UTM),
+  and whether the build transformed the points of the source to it (the COPC of a geographic or
+  geocentric cloud is built in a projected CRS). A host shows it ("built in ...") when
+  `transformed`, and reads the CRS itself from the COPC header as before.
+* `version` identifies the bytes of the file a client opens (the file, or the index of a
+  directory) as they are now: lowercase hex, from the file's modification time, size and, on
+  POSIX, device and inode, so it changes whenever a build rewrites or replaces that file under
+  the same hash (a forced rebuild, a rebuild to a newer layout, a copy). It is opaque: a host
+  compares it and never parses it. A host can put it in the URLs of an artifact and let clients
+  keep what such a URL returns without asking again while `DDBResolveBuildFile` still reports
+  it.
+
+`DDBResolveBuildFile` returns a JSON object,
+`{"path": "<absolute path>", "mediaType": "<type>", "version": "<version>"}`: `mediaType` is the
+one of the manifest when the file is a declared artifact (a file artifact, or the index of a
+directory artifact) and is absent for any other file of a directory artifact (its tiles);
+`version` is the current version of the artifact the file belongs to, the one the build object
+lists (the tiles of a directory have the version of its index). The path sits under the `<root>`
+placeholder in the fixture.
+
+## Path vectors
+
+`vectors/entry-paths.json` pins libddb's dataset path rules (`src/include/entry_path.h`,
+`DDBNormalizePath` in `ddb.h`). libddb's unit tests run every vector, and Registry's
+`DatasetPathPolicy` tests are meant to run the same file against `DDBNormalizePath`, so both
+sides accept and reject the same paths.
+
+```json
+{
+  "description": "...",
+  "vectors": [
+    {"input": "sub/.ddb/x", "expected": {"rejected": "reserved"}, "note": "optional, for humans"},
+    {"input": ".uploads/x", "reserved": [".uploads"], "expected": {"rejected": "reserved"}},
+    {"input": "a\u0000b", "cString": false, "expected": {"rejected": "nul"}}
+  ]
+}
+```
+
+| Key | Meaning |
+| --- | --- |
+| `input` | The path, a JSON string (UTF-8) |
+| `reserved` | Optional: the `reservedJson` argument, an array of names reserved as the first segment only. Absent: `NULL` |
+| `cString` | Optional, default `true`. `false` for an input with a NUL byte: the C API takes a NUL-terminated string and cannot receive it, so only `ddb::normalizeEntryPath` runs it (Registry rejects NUL before it calls libddb) |
+| `expected` | The exact output of `DDBNormalizePath`: `{"path": "<normalized>"}` or `{"rejected": "<code>"}` (`schemas/normalize-path.schema.json`) |
+| `note` | Optional explanation |
+
+The rules, checked in this order: `empty` (the input is ""), `nul`, `encoding` (not valid UTF-8),
+`absolute` (a leading `/` or `\`, which covers POSIX roots, UNC and device paths, or a drive
+`X:`), `traversal` (a `..` segment), `empty` (nothing left once empty and `.` segments are
+dropped), `reserved` (a `.ddb` segment at any depth, or a caller name as the first segment). `/`
+and `\` both separate segments, as in Registry. The `.ddb` segment is matched as the file
+systems a dataset may live on open it, on every platform alike: ASCII letters in any case,
+trailing dots and spaces dropped and what follows a `:` (an NTFS stream name) ignored, so
+`.DDB`, `.ddb.`, `.ddb ` and `.ddb::$INDEX_ALLOCATION` are reserved. So is the NTFS 8.3 short
+name of `.ddb`, `ddb~` and one or more digits, matched the same way (`DDB~1`, `ddb~2.`), while
+`ddb`, `ddb~` and `ddb~x` are no short name of it. Other names are compared
+byte for byte (`.ddbx` and `photos/.uploads/x` are ordinary) and are not Unicode-normalized. A JSON string
+cannot hold invalid UTF-8, so the `encoding` rejection is tested in `entry_path_test.cpp` only.
+
+## Normalisation
+
+Only values that change from run to run or from machine to machine are normalised, and the
+normalised output keeps the JSON types, so it still matches its schema.
+
+| Normalisation | Applies to | Why |
+| --- | --- | --- |
+| `<root>` placeholder: the absolute dataset folder, in its native and generic form, in every string; after it `\` becomes `/` | every fixture (in practice the `DDBInfo` paths) | the test area is a temporary folder |
+| volatile key `depth`: value 0 | `info-*` | `DDBInfo` counts the folders of the absolute path |
+| volatile keys `id` (`"<volatile>"`) and `mtime` (0) | meta items, meta dump | a new random UUID and the current time on every write |
+| volatile keys `lastAttempt` and `retryAfter`: value 0 | `pending-build-info`, `build-artifacts-pending` | the time of the build attempt, and the retry time derived from it (the tests check `retryAfter` = `lastAttempt` + 60 before normalising) |
+| volatile key `version`: `"<volatile>"` | `capabilities` | the library version and git commit of the build |
+| volatile key `version`: `"<volatile>"` | `build-artifacts`, `list-entries-ex`, `resolve-build-file`, `copy-build-artifacts` | the version of an artifact comes from the modification time (and, on POSIX, the inode) of the file the build wrote |
+| `<cache>` placeholder, volatile key `hardwareThreads`: value 0 | `effective-config` | the cache folder is a temporary folder; the cores of the machine |
+| sorted by `path`, `key`, `data` | `meta-dump` | libddb orders the dump by `id`, a random UUID |
+
+Not normalised, fixed at the source instead: mtimes (set on the inputs), hashes and sizes
+(committed inputs), capture times (GPS time stamp, shipped zoneinfo).
+
+The comparison is strict on structure, keys and JSON types (an integer never equals a float, so
+`1700000000` turning into `1700000000.0` fails). Floats are equal within a relative 1e-9, so the
+last-digit differences between compilers and math libraries (Linux and Windows CI) do not fail.
+
+## Validation
+
+The C++ tests validate every output twice (raw and normalised) with `json_schema_check.h`, a
+checker for the subset of draft 2020-12 these schemas use: no JSON Schema library is among the
+vcpkg dependencies, and none was added. It rejects any keyword outside the subset, so a schema
+cannot rely on a keyword that would be ignored. `ContractFiles.FixturesMatchTheirSchemas` checks
+that every committed fixture matches its schema and that every schema has a fixture.
+
+The reference implementation can cross-check the same files:
+
+```sh
+pip install jsonschema   # >= 4.18
+python3 -I tests/contract/check_schemas.py
+```
+
+## Changing an output
+
+A test fails with a JSON patch from the fixture to the new output. When the change is intended:
+
+```sh
+cd build
+DDB_UPDATE_CONTRACT_FIXTURES=1 ./ddb_unit_tests --gtest_filter='Contract*'
+DDB_UPDATE_CONTRACT_FIXTURES=1 DDB_TEST_CACHE_DIR=... ./ddbtest --gtest_filter='ContractFixturesDroneImage*'
+git diff ../tests/contract
+```
+
+Review the diff, adjust the schema if a field or type changed, and list the change below. The
+ABI rule applies (XI): outputs only grow; renaming or retyping a field is a breaking change that
+Registry has to adopt first.
+
+### Changes
+
+* 2026-10-21: baseline (DroneDB `fixes-and-optimizations` after `7ee39d2`).
+* 2026-10-21: `capabilities` added (2.0.0). Its `symbols` list is
+  `src/include/ddb.symbols`, so every new export updates this fixture too.
+* 2026-10-21: `normalize-path`, `normalize-path-rejected` and `vectors/entry-paths.json` added
+  (2.0.0: `DDBNormalizePath`); `capabilities` lists the new export.
+* 2026-10-21: `stac-data-collection`, `stac-data-item-georaster`, `stac-data-item-image` and
+  `stac-data-item-collection` added with their schemas (2.0.0: `DDBStacData`,
+  `DDBStacItemCollectionData`); `capabilities` lists the new exports. The shared parts of
+  `stac-item.schema.json` (`stacExtensions`, `geometry`, `bbox`, `properties`) and
+  `stac-collection.schema.json` (`extent`) moved to their `$defs`, unchanged, so the data-only
+  schemas reference them.
+* 2026-10-21: `capabilities` gains the error codes `INVALIDARGS` (7), `RETRYABLE` (8) and
+  `SHUTDOWN` (9), the `errorReasons` array (the reasons of `DDBGetLastErrorReason`) and the new
+  export `DDBGetLastErrorReason` (2.0.0).
+
+* 2026-10-21: `build-artifacts`, `build-artifacts-pending`, `list-entries-ex`,
+  `resolve-build-file`, `copy-build-artifacts` and `entry-types` added with their schemas
+  (2.0.0: `DDBGetBuildArtifacts`, `DDBListEntriesEx`, `DDBResolveBuildFile`,
+  `DDBCopyBuildArtifacts`, `DDBGetEntryTypes`; see [Build manifest](#build-manifest));
+  `capabilities` lists the new exports. The existing fixtures did not change.
+
+* 2026-10-21: `effective-config` added with its schema (2.0.0: `DDBConfigure`,
+  `DDBGetEffectiveConfig`); `capabilities` lists the new exports. The existing fixtures did not
+  change.
+
+* 2026-10-21: `capabilities` lists the new exports for the process configuration, shutdown, cancellation and logging (2.0.0):
+  `DDBShutdown`, `DDBCreateCancelToken`, `DDBCancel`, `DDBFreeCancelToken`,
+  `DDBSetThreadCancelToken`, `DDBSetLogCallback`, `DDBSetThreadOperation`. Its `cancellable` list
+  now names the exports whose work checks a cancel token (the render paths, the thumbnails,
+  `DDBExportRaster`/`DDBExportRaster2`, `DDBBuild`) instead of `DDBExportRaster2` only; the
+  schema describes it so. The other fixtures did not change.
+
+* 2026-10-21: `capabilities` lists the new export `DDBApplyDeltaEx` (2.0.0). Its output
+  is the conflict list of `DDBApplyDelta` (a JSON array of paths), so it has no fixture of its
+  own. The other fixtures did not change.
+
+* 2026-10-22: the build object (`build-artifacts`, `build-artifacts-pending`, `list-entries-ex`)
+  and `pending-build-info` gain `retryAfter`: when the pending build is retried
+  (`lastAttempt` + the 60 s backoff of `buildPending`), integer Unix seconds, null when
+  `lastAttempt` is. Additive: no other field changed. In the two pending fixtures it is a volatile
+  key next to `lastAttempt`. Registry's exact-JSON adapter tests of these outputs
+  (`Abi11ContractTests`) need the field before Registry moves to a libddb build that has it.
+
+* 2026-10-23: `entry-types` reports `thumbnail: "file"` for `Panorama` and `GeoPanorama` (it was
+  `"none"` in 2.0.0, which made Registry stop rendering their thumbnails: they are JPEG/TIFF images
+  rendered from the file like an `Image`). `Video` and `GeoVideo` stay `"none"`. A value of an
+  existing field changes (the schema's enum already allows it): Registry follows the field, so a
+  Registry on the new libddb renders panorama thumbnails again. No other fixture changed.
+
+* 2026-10-24: every export that takes a dataset-relative entry path applies the rules of
+  `DDBNormalizePath` to it (behaviour change, no output changed, so no fixture
+  did): `\` and `/` separate segments, `.` segments and repeated or trailing separators are
+  dropped, and a path that is absolute, has a `..` segment, names a `.ddb` folder or is not valid
+  UTF-8 is refused with `DDBERR_INVALIDARGS` (also by the exports of 1.x, which keep
+  `DDBERR_EXCEPTION` for their other invalid arguments), with the message `Invalid <argument>
+  '<path>': <code>` and an empty `DDBGetLastErrorReason()`. A valid path behaves as before (the
+  vectors above are the same input Registry's `DatasetPathPolicy` already sends). Covered:
+  `DDBGet`, `DDBListEntries`, `DDBListEntriesEx` (a folder: `""` and `"."` are the root; a
+  `..` segment is refused, where `a/../b` used to be resolved), `DDBSearch` (the query is a
+  pattern over entry paths), `DDBMoveEntry` (a trailing separator is dropped, where it used to be
+  an error), `DDBBuild` (`source`), `DDBIsBuildable`, `DDBIsBuildActive`, `DDBIsBuildComplete`,
+  `DDBGetBuildStatus`, `DDBGetBuildArtifacts` (the `path` members of their outputs are the
+  normalized spelling), `DDBMeta*` (`path`, and the rows of `DDBMetaRestore`), `DDBStac`,
+  `DDBStacData`, and the paths of a delta (`DDBApplyDelta`, `DDBApplyDeltaEx`,
+  `DDBComputeDeltaLocals`, `verifiedHashes` keys: a delta path in `.ddb`, or spelled with `\`,
+  used to be accepted). Not covered, because they are filesystem paths: `DDBAdd*`, `DDBRemove`,
+  `DDBList`, `DDBInfo`, dataset folders, output files, `DDBBuild`'s `dest`. The tests are
+  `tests/unit/c_abi_entry_path_test.cpp` (every vector through every export).
+
+* 2026-10-24: `effective-config` gains the setting `gdalCacheMb` and its source:
+  an integer from 16 to 1048576 (MiB), the size of GDAL's block cache for the whole process. The
+  fixture sets it to 256 through `DDBConfigure`; without it the value is the bound from
+  `DDB_GDAL_CACHE_MB` or 1024, source `environment` or `default`. Additive: the other
+  settings did not change.
+
+* 2026-10-24: the `cancellable` list of `capabilities` grows (the analyses, the
+  delta and the masks check the token too): `DDBGetRasterMetadata`, `DDBGetRasterValueInfo`, `DDBGetRasterPointValue`,
+  `DDBGetRasterAreaStats`, `DDBGetRasterProfile`, `DDBCalculateVolume`, `DDBDetectStockpile`,
+  `DDBDetectAllStockpiles`, `DDBGenerateContours`, `DDBMaskBorders`, `DDBComputeDeltaLocals`,
+  `DDBApplyDelta` and `DDBApplyDeltaEx` (13 exports, 26 in all). Additive: no other member and no
+  other fixture changed. `DDBApplyDelta(Ex)` is atomic to a cancel: it stops with
+  `DDBERR_CANCELED` while it reads and hashes the added files, with the dataset and the source
+  files untouched, and once it starts to change the dataset it applies the delta whole and
+  returns `DDBERR_NONE` (a cancel or a shutdown that comes later is not seen). A canceled
+  `DDBMaskBorders` leaves no output file.
+
+* 2026-10-25: the artifact role `gsplat.georef` is removed from the manifest: the `roles` of the
+  `GaussianSplat` entry type in `entry-types` are now `gsplat.lod`, `gsplat.spz` and
+  `gsplat.bounds`, and `DDBGetBuildArtifacts` and `DDBListEntriesEx` no longer list a
+  `gsplat/georef.json` artifact. No build ever wrote that file (libddb has no way to give a splat
+  a georeference), so no output lost data; a host that reads the role list must not require it.
+  The `properties` of a Gaussian splat entry no longer carry `"georeferenced": false` either; a
+  splat is never georeferenced, so a host reads the absent member as false. The `entry-types`
+  fixture changed; no other fixture did.
+
+* 2026-10-27: an artifact may carry `fallbackFor` (additive; only legacy artifacts do): the role
+  it stands in for. `pointcloud.ept` has `"fallbackFor": "pointcloud.copc"`. A legacy artifact
+  is listed while that role is missing, as before for a point cloud; the rule no longer depends
+  on whether other current artifacts of the type exist. No fixture changed (none lists a legacy
+  artifact).
+
+* 2026-10-28: the artifact `gsplat.spz` is legacy (`"fallbackFor": "gsplat.lod"`): a splat build
+  made before the RAD layout lists it while `gsplat.lod` is missing, and a build that publishes
+  `gsplat/model.rad` removes `gsplat/model.spz` alone (the folder is shared). The roles of
+  `entry-types` and every fixture are unchanged: none of them lists the `legacy` or `fallbackFor`
+  of an artifact for this type.
+
+* 2026-10-28: `DDBResolveBuildFile` returns an object `{"path", "mediaType"?}` instead of a plain
+  path string (still 2.0.0, ABI 2.0: the export is new in 2.0 and no release carries the string).
+  `mediaType` is the manifest's type of the artifact when the file is a file artifact or the index
+  of a directory artifact, and absent otherwise (tiles). A host that serves the file with the
+  manifest's type reads it from here and falls back to its own mapping when it is absent; a host
+  built for the string reads `path` when the output starts with `{`. `resolve-build-file` and its
+  schema `build-file.schema.json` changed; no other fixture did.
+  STAC names the `.spz`, `.splat` and `.ksplat` data asset `application/octet-stream`, the media
+  type of the manifest (it said `application/x-spz` for `.spz`).
+
+* 2026-10-28: the `properties` of an entry may carry `georef` (additive), with `georeferenced: true`
+  and the origin of the local frame as the point geometry of the entry: `{"kind": "enu", "origin":
+  [latitude, longitude, altitude]}` or `{"kind": "projected", "crs": "<EPSG:xxxx, PROJ string or
+  WKT>", "offset": [x, y, z]}` (a point of the file plus `offset` is in `crs`). A Gaussian splat
+  with a georeferencing sidecar (`<stem>.geo.json`, `georef.json`, `reference_lla.json` or the
+  ODM `coords.txt`, see `detectLocalFrameGeoref`) now has them, as a georeferenced model has the
+  first two (a model gains `georef`); a splat without one still carries neither, as noted on
+  2026-10-25. The `bounds.json` of the built splat gains `up: [0, 0, 1]`, `upConfidence: 1` and
+  `upSource: "georef"` and `wgs84Footprint`, a GeoJSON Polygon geometry (`[longitude, latitude]`
+  ring) of its bounding box. `entry.schema.json` describes the two members; no fixture changed.
+
+* 2026-10-28: the export `DDBExportSplatTrainingData(ddbPath, folder, outFolder, optionsJson,
+  progress, progressUserData, output)` is new in 2.0.0 (ABI 2.0, no bump). It writes the training
+  data of a Gaussian splat (a COLMAP sparse model, the images and `georef.json`) from the ODM
+  project that is in `folder` of the dataset. Its output is `{"warnings": [string], "images": n,
+  "points": n}`; the options are `{"maxImageSize"?: n, "maxPoints"?: n}` (whole numbers from 0, 0 for
+  the originals and for no points; `maxPoints` at most 10000000). `outFolder` must be missing or
+  empty and outside of the dataset, so the export never replaces a file it did not make. It returns
+  `DDBERR_INVALIDARGS` for an option that is not usable and for an `outFolder` in the dataset, that
+  is a file or that is not empty,
+  `DDBERR_NOTFOUND` for a folder that is not in the dataset, `DDBERR_EXCEPTION` for a file of the
+  project that is missing or unusable (the message names `coords.txt`, `cameras.json`... ) and
+  `DDBERR_CANCELED` when
+  the token is canceled or the progress callback returns non-zero. `capabilities` lists the export in
+  `symbols` and in `cancellable`; no other fixture changed.
+
+* 2026-10-28: a Gaussian splat has a new artifact role, `gsplat.export` (`gsplat/export.spz`,
+  `application/octet-stream`, `downloadName` `export.spz`): the splat as one `.spz` file for other
+  tools, made on demand and never by a build. It is listed (last) only while the file exists, is not
+  `legacy` and has no `fallbackFor`, is not part of the completeness of a build (`complete` still
+  means `gsplat/model.rad`), and goes with `gsplat/` when the entry is built again. The artifacts
+  `gsplat.lod` and `gsplat.spz` gain a `downloadName` (`model.rad`, `model.spz`), so a host that
+  offers the first artifact with a `downloadName` as the download of an entry (Registry's
+  `build-artifact`) serves a splat. The `entry-types` fixture lists the new role; no other fixture
+  changed (none lists a splat build).
+
+* 2026-10-28: the export `DDBExportSplatSpz(ddbPath, entryPath, output)` is new in 2.0.0 (ABI 2.0, no
+  bump). It makes the `.spz` of a Gaussian splat for other tools in the build folder of the entry
+  (`gsplat/export.spz`, role `gsplat.export`) with the build lock of the entry held, and returns
+  `{"path": string, "role": "gsplat.export", "cached": bool}`: the absolute path of the file, and
+  whether it was there already (it exists, is not empty and is not older than the dataset file).
+  It returns `DDBERR_INVALIDARGS` for an entry that is not a splat or whose format (`.ksplat`,
+  `.sog`, `.rad`) is not converted, `DDBERR_NOTFOUND` for an entry that is not in the dataset or
+  whose build is not complete (the message says it is not built), `DDBERR_BUILDINPROGRESS` while a
+  build (or another export) of the entry holds the lock, `DDBERR_RETRYABLE` on a full disk and
+  `DDBERR_CANCELED` when its cancel token is canceled. `capabilities` lists the export in `symbols` and
+  in `cancellable`; no other fixture changed.
+
+* 2026-10-28: `pending-build-info` gains `awaitingFiles` (additive, boolean, required): true when
+  `missingDependencies` is not empty. Such a build is not retried by a timer: `DDBBuild` with
+  `pendingOnly` (and no `force`) skips it whatever `retryAfter` says, and `DDBIsBuildPending` does
+  not count it (it is true only when a deferred build awaits no file). Adding a file whose name
+  matches one of the missing dependencies (by file name, in any folder, ignoring case) through
+  `DDBAdd`, `DDBAddWithOptions`, `DDBAddWithHints`, `DDBMoveEntry` or `DDBApplyDelta` releases the
+  build: its marker loses its dependencies and its time (`lastAttempt` 0), so it is due at once and
+  `awaitingFiles` is false. `DDBCopyBuildArtifacts` releases a copied marker the same way when the
+  destination indexes such a file already. The fixture of the deferred `roads.shp` has `"awaitingFiles": true`; no
+  other fixture changed. Registry's exact-JSON adapter tests of this output need the field before
+  Registry moves to a libddb build that has it.
+
+* 2026-10-28: the build object (`build-artifacts`, `build-artifacts-pending`, `list-entries-ex`)
+  gains `awaitingFiles` (additive, boolean, required), the value `pending-build-info` reports for
+  the same marker: true when the pending marker lists missing files, false otherwise (also
+  without a marker). The fixture of the deferred `roads.shp` has `"awaitingFiles": true`, the
+  other build objects `false`. Registry's exact-JSON adapter tests of these outputs need the
+  field before Registry moves to a libddb build that has it.
+
+* 2026-10-28: an artifact of the build object (`build-artifacts`, `list-entries-ex`) and of
+  `copy-build-artifacts` gains `version` (additive, string, required), and `resolve-build-file`
+  gains `version` (additive, string, present when it can be read): the version of the artifact,
+  from the file a client opens (the file, or the index of a directory), which changes whenever a
+  build rewrites or replaces that file under the same hash. The resolved version of a file is the
+  one of its artifact, so the index and the tiles of a directory share it. The value differs
+  from run to run and is normalised to `"<volatile>"` in these fixtures; `build-artifacts-pending`
+  lists no artifact and did not change. Registry's exact-JSON adapter tests of these outputs need
+  the field before Registry moves to a libddb build that has it.
+
+* 2026-10-29: the `model.3dtiles` artifact of a Model gains a `downloadName`
+  (`model.3dtiles.zip`): the first directory artifact with one, which a host offers as a ZIP
+  archive of what is in it (`tileset.json` at its root). The `model.3dtiles` of a `.3tz` has none.
+  No fixture changed (none lists a Model build); a host that offers the first artifact with a
+  `downloadName` as the download of an entry now offers the 3D Tiles of a Model, so it must
+  serve a directory as a ZIP before it moves to a libddb build that has the field.
+
+* 2026-10-29: `vectors/entry-paths.json`: the reserved `.ddb` segment is matched in any case of
+  its ASCII letters, without trailing dots and spaces and without an NTFS stream name (`.DDB/x`,
+  `.ddb./x`, `.ddb /x`, `.ddb::$INDEX_ALLOCATION/x` are `reserved`; `.DDB/x` was accepted), on
+  every platform: on Windows and macOS those names open the `.ddb` folder of the dataset, so an
+  upload to `.DDB/build/<hash>/...` wrote into its builds. Registry's copy of the vectors takes
+  the same change when it moves to a libddb build that has it.
+
+* 2026-10-29: `vectors/entry-paths.json`: the NTFS 8.3 short name of `.ddb` is reserved too:
+  `ddb~` followed by one or more digits, in any case, with trailing dots and spaces and an NTFS
+  stream name dropped as for `.ddb` (`DDB~1/build/x.tif`, `sub/ddb~2`, `DDB~12./x` are
+  `reserved`; they were accepted), on every platform: on an NTFS volume with short names
+  `DDB~1` opens the `.ddb` folder of the dataset. `ddb`, `ddb~`, `ddb~x`, `ddb~1x` and
+  `ddb~1.txt` stay ordinary. Registry's copy of the vectors takes the same change when it moves
+  to a libddb build that has it.
+
+* 2026-10-30: `raster-metadata-formula`: the histogram of a formula bins the range a viewer shows
+  instead of the values' `[min, max]`: that range narrowed to the formula's range (`range` of its
+  `algorithms` entry) and to one 2%-98% spread around the percentiles (`[p2 - (p98 - p2), p98 +
+  (p98 - p2)]`), the whole `[min, max]` when that is empty. A few outliers (an NDVI of -191) no
+  longer put almost every value in one bar. A value is counted in the bin whose edges hold it
+  (it was binned with 254 steps over the edges of 255 bins, up to one bin low), and the histogram
+  gains `below` and `above` (additive, integers): the values outside its edges. `min`, `max`,
+  `mean`, `std` and the percentiles are those of all the values, as before. The fixture and the
+  schema changed; no other fixture did.
+
+* 2026-10-30: a raster query of a place without data is `DDBERR_INVALIDARGS` (it was
+  `DDBERR_EXCEPTION`), in these exports of 1.x too, like a refused entry path: `DDBGetRasterPointValue`
+  for a pixel outside the raster (message `No valid data at the point: pixel (x, y) is outside the
+  WxH raster`), `DDBGetRasterAreaStats` for a rectangle with no pixel in the raster (`No valid
+  data in the area: (x0, y0) - (x1, y1) is outside the WxH raster`; it used to be clamped onto the
+  nearest edge, whose pixels it measured) or with no-data pixels only (`No valid data in the
+  area: its pixels are all no data`), `DDBDetectStockpile` when the click is outside the raster,
+  the search region has no data, the search window is too small or no pile is found (`No
+  stockpile detected at this location`), and `DDBDetectAllStockpiles` for a raster without valid
+  elevation (no pile found is an empty list, as before). The reason is empty. No fixture changed.
+
+* 2026-11-09: one build key (FR-XC-28, D-020). The build folder of an entry is named by its build key: the
+  hash for a type whose build depends on the content only, and `<hash>-<16 hex characters of the SHA-256 of
+  the georef property>` for a model or a splat that has a georeference (the same file in two folders builds
+  once for each georeference). The pending marker is the entry's own (`<key>.<pathId>.pending`), so two
+  entries with the same content have two markers; the markers of the earlier layout (`<hash>.pending`) are
+  moved by the rescan and by `DDBBuild` with `pendingOnly`. Additive, required members: `key` in the build
+  object (`build-artifacts`, `build-artifacts-pending`, `list-entries-ex`; null when the entry is not
+  buildable), in `pending-build-info` and in `copy-build-artifacts`; `hash` is still the content hash.
+  `DDBResolveBuildFile` and `DDBCopyBuildArtifacts` take the key (`hash` argument): a hash alone names the
+  build of a place-independent type. `DDBRescan` and `DDBRescanEx` add `buildKey` and `buildKeyChanged` to the
+  element of an entry they re-read (no fixture lists a rescan): `buildKeyChanged` is true when the entry's
+  build is not in the folder of its key, which a host rebuilds. The schemas and the five fixtures above
+  changed (the three schemas gain `key`); no other fixture did. Registry's exact-JSON adapter tests of
+  these outputs need the member before Registry moves to a libddb build that has it. The members are
+  additive and come with the ABI minor 4 of the 2.4.0 release.
+
+* 2026-11-09: `capabilities` lists the raster value exports (new in 2.4, U-201: `DDBGetRasterValueInfoEx`,
+  `DDBGetRasterPointValueEx`, `DDBGetRasterAreaStatsEx`, `DDBGetRasterProfileEx`,
+  `DDBGenerateContoursEx`, `DDBGenerateMemoryThumbnailEx2`, `DDBMemoryTileEx2`, `DDBExportRaster3`, and the
+  pixel exports for a raster without a map, an R-JPEG: `DDBGetRasterPointValuePixelEx`,
+  `DDBGetRasterAreaStatsPixelEx`), which take a `DDBRasterOptions` (NoData override, formula, WGS84 window).
+  The point result adds `unit` (of the band, or of the thermal formula). The value info JSON grows
+  (`nodata`, `nodataOverridden`, `nodataInvalid`, `pixelCount`, `validPixelCount`, `windowPixelCount`,
+  `stretch`, `scale`, `offset`); the point result of a map coordinate adds `lon` and `lat`.
+
+* 2026-11-10: new in 2.4 (U-202: FR-RAS-03, FR-RAS-06, D-022): the algorithm list of the raster metadata has the
+  thermal formula `FAHRENHEIT` (after `CELSIUS` and `KELVIN`), and the `expr` of `CELSIUS` and `KELVIN` says that the
+  band unit (K, degrees Celsius or Fahrenheit) is converted to theirs. `DDBRasterOptions` grows a field,
+  `rescaleUnit` (a smaller `structSize`, from a caller built before 2.4, still works). The thermal formulas convert from the unit of the band:
+  value info (`valueMin`, `valueMax`, `unit`, `stretch`), point, area, profile and contours give their values in the
+  unit of the formula, and the thermal formulas of a tile, a thumbnail and an export too. No export is added or
+  changed.
+* 2026-11-10: `capabilities` lists `DDBGenerateContoursEx2` (new in 2.4, U-413, FR-RAS-11), also in
+  `cancellable`: `DDBGenerateContoursEx` with a progress callback (fraction, phase "statistics", "levels" or
+  "lines"; a non-zero return cancels). The contour result gains `truncated` (true when the lines were cut at the
+  cap) and `featureCap` (the cap, 100000 lines); both are in the output of `DDBGenerateContours`,
+  `DDBGenerateContoursEx` and `DDBGenerateContoursEx2`. A host that calls the new export checks
+  `DDBGetAbiVersion()` for 2.4 or later. No fixture lists a contour result.
+* 2026-11-10: the raster panels (U-415, additive, new in 2.4). Each item of the `algorithms` of
+  `DDBGetRasterMetadata` carries `requiredBands` (the names of the bands the formula reads, for example
+  `["Red", "NIR"]`) and `category` (`rgb`, `multispectral` or `thermal`), next to `disabledReason`, whose text
+  is unchanged. `DDBGetRasterInfo` adds `detectedSensorName`, the name of the sensor profile next to its id
+  (absent when no profile matched). For a raster of a generic profile (`generic-4band`) the
+  `availablePresets` are built from the bands the raster has: a True Color or Color Infrared preset maps the
+  bands by their names and is left out when a band is missing, an index preset is left out when a band its
+  formula reads is missing. The bands are read by their usual names, whatever their case (`R`, `G`, `B`, `N`,
+  `NIR`, `Near Infrared`, `RedEdge`, `Red Edge`, `RE`); when no description names one (`Band 1`, ...), the
+  profile's presets stand. The generic profile is named `Generic 4-band`. A raster of fewer than three data bands that is not thermal has no band filter, so
+  every formula that needs bands is listed disabled with "Requires bands: ...". `raster-metadata.schema.json`
+  and `raster-info.schema.json` changed; the two `raster-metadata` fixtures changed, `raster-info` did not.
+* 2026-11-10: `capabilities` lists `DDBBuildEx2` (new in 2.4, FR-PRC-42), also in `cancellable`: `DDBBuildEx`
+  with a progress callback (fraction from 0 to 1, or -1 while nothing is measured; the phase: the type of the
+  entry, `warping`, `overviews`, `compressing`, `statistics`, `publishing`; a non-zero return cancels). The STAC
+  asset of a plain `.laz` is `application/vnd.laszip` (only the COPC file of a build is
+  `application/vnd.laszip+copc`) and the footprint of a vector entry is always a WGS 84 envelope (the rescan
+  replaces one in metres); no fixture changed.
+* 2026-11-10: `DDBExportRaster3` exports a window (new in 2.4, U-406, FR-RAS-16): with `DDB_RASTER_OPT_BBOX` the
+  bbox of `DDBRasterOptions` is also the part of the raster the export writes. No export, field or fixture
+  changed; a 2.0 library ignores the box and exports the whole raster.
+* 2026-11-10: `entry.schema.json` documents `warningCode` (new in 2.4, U-408, FR-EXP-18), the stable code of
+  the `warning` of an entry: `dwg-converter-missing` for a DWG drawing without the dwg2dxf converter. No
+  fixture changed.
+* 2026-11-10: R-JPEG (U-603, FR-RAS-13..15, changed in 2.4): a DJI R-JPEG is read from its raw thermal data;
+  its raw counts have no conversion in libddb, so value info, point and area give the raw counts with `unit`
+  "" (`isDirectValue` false, no `calibration`, whatever the formula), and point and area refuse a thermal
+  formula (DDBERR_INVALIDARGS); a FLIR
+  R-JPEG has a `calibration` only when its tags give the Planck constants. No schema or fixture changed.
+
+* 2026-11-10: 2.4.0 (ABI 2.4), the one release after 2.0.1: `capabilities` has `abi.minor` 4. Everything
+  documented as new in 2.4 above is in it, additively (no export was removed or changed its signature, and a
+  `DDBRasterOptions` of a smaller `structSize` still works): the new exports `DDBAlignRasterEx`,
+  `DDBMaskBordersEx` and `DDBMergeMultispectralEx` (the old exports with an options struct whose `overwrite`
+  replaces an output that exists; `DDBMaskBordersEx` is in `cancellable` too), the raster value exports and
+  `DDBRasterOptions` (`DDBGetRasterValueInfoEx`, `DDBGetRasterPointValueEx`, `DDBGetRasterPointValuePixelEx`,
+  `DDBGetRasterAreaStatsEx`, `DDBGetRasterAreaStatsPixelEx`, `DDBGetRasterProfileEx`, `DDBGenerateContoursEx`,
+  `DDBGenerateMemoryThumbnailEx2`, `DDBMemoryTileEx2`, `DDBExportRaster3`, all in `cancellable` too), the build
+  key members (`key`, `buildKey`, `buildKeyChanged`), `DDBBuildEx2` and `DDBGenerateContoursEx2` (both in
+  `cancellable`), `DDBRasterOptions.rescaleUnit` with the `FAHRENHEIT` formula, the window export of
+  `DDBExportRaster3` (`DDB_RASTER_OPT_BBOX`), `truncated` and `featureCap` of the contour result, the
+  `warningCode` of an entry, and `requiredBands`, `category` and `detectedSensorName` of the raster panels. A
+  host that calls a new export, reads `key`, sets `rescaleUnit` or sends a bbox to `DDBExportRaster3` checks
+  `DDBGetAbiVersion()` for 2.4 or later.
+  Behaviour that changed since 2.0.1, with no new export: `DDBAlignRaster`, `DDBMaskBorders` and
+  `DDBMergeMultispectral` refuse an output that exists (`DDBERR_EXCEPTION`); a tile (`DDBMemoryTileEx`,
+  `DDBMemoryTileEx2`), a thumbnail (`DDBGenerateMemoryThumbnailEx`) and an export (`DDBExportRaster3`) with a
+  colormap and no formula of exactly one band (a DEM, or `bands` or a preset that name one band) are the RGBA
+  picture of that band with the colormap, over the rescale else over the default stretch of the band, with
+  no-data transparent, where 2.0 drew the tile and the thumbnail grey and exported one grey 8-bit band
+  (FR-RAS-01, FR-RAS-26); an unknown colormap of such a band is `DDBERR_INVALIDARGS` (`DDBERR_EXCEPTION` from
+  `DDBMemoryTileEx`); a Byte band with a colormap is stretched over its exact minimum to maximum (its first tile
+  reads the statistics of the band, which a plain Byte tile does not), a band with no pixel that has a value
+  (all NoData) gives a transparent tile, a thumbnail and an export instead of an error, and a tile out of the
+  raster is refused ("Out of bounds") when it has bands, a preset or a NoData value, and transparent with a
+  colormap alone. The temperatures of a FLIR R-JPEG (value info, point, area, thumbnail, export) are those of the
+  FLIR measurement equations (emissivity, reflected temperature, atmosphere, IR window, as far as the file says
+  them) and the raw image of a FLIR record that is a PNG image is read, so the handheld cameras have
+  temperatures; a raw image over 4 megapixels is not read as one, and the relative humidity of the `calibration`
+  is a fraction from 0 to 1 also when it comes from the XMP (FR-RAS-13..15). A rescan or `ddb add` no longer
+  indexes the staging folders (`.align-stage-`, `.mask-stage-`, `.merge-stage-`, `.bm3d-stage-`, `.cog-stage-`,
+  `.copc-stage-` and 16 characters) that an interrupted operation left in a dataset, and the progress of
+  `DDBBuildEx2` always reports `warping` (fraction 0) for a build that warps (FR-PRC-42).
+
+* 2026-11-11: 2.4.1 (ABI 2.4, a patch: no export is added or removed, `capabilities` is unchanged and
+  `abi.minor` stays 4). Behaviour that changed for the callers of the raster API, with no new export and no
+  schema or fixture change: the area statistics (`DDBGetRasterAreaStats`, `DDBGetRasterAreaStatsEx` and
+  `DDBGetRasterAreaStatsPixelEx`) read the raster in windows with at most about 40 MB of pixel buffers, so
+  the area of a large raster no longer exhausts the memory (the whole area of a 30000 x 30000 raster took
+  3547 MB of peak memory, 148 MB now); the result is identical up to 2^23 values, and above that `count`, `min`,
+  `max` and `median` are exact and `mean` and `std` are within a relative 2e-6 of the exact ones (compensated
+  sums). The thermal fallbacks, which read the values of a thermal raster that the GDAL statistics cannot serve
+  (the point, the area statistics and the value info of such a raster), read windows too (the value info of a
+  large raster: 5.38 GB down to 142 MB of peak memory), and the raw thermal data of a GDAL raster (a thermal
+  GeoTIFF) of more than 4 megapixels is refused instead of read whole.
+
+* 2026-11-12: 2.5.0 (ABI 2.5: `capabilities` has `abi.minor` 5, and `DDBMemoryTileEx3` in `symbols` and
+  `cancellable`). `DDBMemoryTileEx3` is `DDBMemoryTileEx2` with an `outputFormat` (`png`, `jpeg`/`jpg`,
+  `webp` or their MIME types; NULL or empty: PNG, the bytes of `DDBMemoryTileEx2`): the visualization tile is
+  encoded once in the format the host serves, as `DDBMemoryTileFmt` encodes a plain tile, instead of a PNG
+  that the host decodes and encodes again. No output, schema or fixture changes otherwise.
+  `DDBRenderRasterRegionEx2` and `DDBRenderRasterIndexEx` (also in `symbols` and `cancellable`) are
+  `DDBRenderRasterRegionEx` and `DDBRenderRasterIndex` with a `DDBRenderOptions` (16 bytes: `structSize`,
+  `flags`, `background`, `reserved`; NULL: the bytes of the older export). `DDB_RENDER_OPT_BACKGROUND`
+  composites the image over an opaque `0xRRGGBB`, with the rounding of Skia's 8-bit compositing, so a host gets
+  in one call the image it composited over its background (PNG and WebP without alpha, JPEG with that colour
+  instead of white); a GeoTIFF refuses it. The region and index renders (the older exports too) take the format
+  `rgba`: the pixels as RGBA, 8 bits a channel, `width * height * 4` bytes, straight alpha, what the PNG of the
+  same render decodes to, so a host that composites several renders reads them with no encode and decode. A
+  WebP of a grey region render is made RGB (the encoder refused it), the JPEG of a region of a raster with an
+  alpha band is RGB over white (the alpha band of the warp made it a four-band JPEG, read as CMYK), and the JPEG
+  of an index composites the partial alpha of an edge over white with the same rounding (it truncated). The index render warps only the
+  bands its formula reads and the alpha band, into memory: the same image from fewer reads.
+  Behaviour that changed, with no new export: the formula renders (tiles, thumbnails, exports, the formula statistics of the metadata)
+  no longer read the bands that cannot change their pixels (a band that the band filter does not map, that has
+  no NoData value and is not the alpha band): their output is byte for byte that of 2.4.
+  The automatic range of a formula export (`DDBExportRaster`, `DDBExportRaster2`, `DDBExportRaster3` with a
+  formula that has no range of its own, such as EXG, GRVI or ENDVI, and no rescale) is the 2nd to the 98th
+  percentile of the formula over a bounded sample of the exported part, as for the range of a formula thumbnail:
+  every pixel of a part of at most 4194304 (2048 x 2048) pixels, so those exports are byte for byte those of 2.4;
+  else its pixels in the largest overview in which it has no more than that; else the part read at the largest
+  size of its proportions within that budget (an even grid of its pixels, nearest); a sample in which no pixel has
+  a value is read once more with 16 times the budget. 2.4 computed the formula over every pixel of the part for
+  the range and once more for the picture, so the colours of a large export may differ slightly from those of 2.4.
+  The opaque value of an alpha band comes from its full-resolution pixels (a sample of windows, then the exact
+  maximum when the sample has none above 0) instead of GDAL's approximate maximum, which reads the overviews: the
+  cubic overviews of a COG ring above the opaque value at the edge of the data (266 for 255), so a UInt32, Int16,
+  Float32 or Float64 alpha band that holds 255 was opaque at 511 and its renders half transparent (a Float32 band of
+  0..1 at 3).
+
+* 2026-11-14: 2.6.0 (ABI 2.6: `capabilities` has `abi.minor` 6; no export is added or removed, the
+  effective configuration has `artefactCacheMb`).
+  The tiles (`DDBTile`, `DDBMemoryTile`, `DDBMemoryTileFmt`, `DDBMemoryTileEx*`, `ddb tile`) are rendered by
+  ddb-tilers. The tiles of a georaster are those of 2.5 in PNG (pixel for pixel) and JPEG (byte for byte); WebP
+  tiles are encoded differently. A photo is converted once to an EPSG:3857 COG and tiled from it, warped by
+  ddb-tilers from the corners of its EXIF footprint in one pass: its tiles may differ from those of
+  2.5. `ddb geoproj` (geoProject) writes its GeoTIFF with ddb-tilers too, on gdalwarp's grid in
+  EPSG:4326 with nearest resampling: a COG, JPEG with the footprint in a mask instead of an alpha
+  band for 8-bit RGB (LZW with an alpha band otherwise, so a GIF or a palette PNG, which 2.5 could
+  not write as JPEG, is projected); an `outsize` below 100% of a JPEG samples the full image, not
+  GDAL's reduced-resolution decode, so its colours differ slightly. The artefact cache (`cacheDir/artefacts`: the COG
+  made for the tiles of each photo or raster of a user, the normalized copies) has a size bound,
+  the setting `artefactCacheMb` (`DDB_ARTEFACT_CACHE_MB`, 4096 MiB by default, 0 for none; in
+  `DDBConfigure` and `DDBGetEffectiveConfig`): past it, the least recently used files are removed
+  when a new one is made, never one used in the last 5 minutes. Point-cloud tiles are ddb-tilers' modern rendering (the octree depth from the density
+  of the cloud in EPSG:3857, a symmetric disc on each point with a per-pixel depth test, the same tile whatever the
+  threads, no seams at the deepest zooms): they differ from those of 2.5. A COPC at an http(s) URL is read with
+  range requests of libddb's HTTP client (206 Partial Content; the ETag, else the Last-Modified date, tells a
+  changed file); a server that does not answer them is refused with that reason. `DDB_COPC_NODE_CACHE_MB` and
+  `DDB_PCTILE_RESOLUTION_OFFSET` are no longer read (ddb-tilers' `DDBT_COPC_NODE_CACHE_MB` and
+  `DDBT_COPC_TILE_CACHE_MB` size its caches). The tile folders of `DDBTile` are named with ddb-tilers' version
+  too, so a new renderer never serves the tiles of an earlier one. Point-cloud thumbnails are drawn by ddb-tilers as its
+  modern tiles are: the whole cloud fitted and centred, in EPSG:3857 when it has a footprint, else in its own
+  coordinates; a cloud without colours is painted with the height ramp of its tiles instead of grey, and the
+  points read are those of the deepest octree levels within the budget (2 points per pixel), as before; a COPC
+  at an http(s) URL is read with the range requests of the HTTP client.
+  The COG of a GeoRaster (GeoTIFF or JPEG 2000) is built by ddb-tilers, with the layout, compression,
+  transparency and statistics sidecar of 2.5; its warp approximates the transform on a grid per
+  tile instead of per scanline, so a warped float raster can differ by about 1e-5 in a few pixels. A full disk
+  during the build is a retryable failure. The GeoTIFFs GDAL reads are read too: LZMA, CCITT, old JPEG, 12-bit
+  JPEG, packed bits, 24-bit floats, CMYK, CIELab, YCbCr without JPEG, JPEG-XL, palettes and 1-bit images. A
+  GeoTIFF georeferenced by ground control points alone is a GeoRaster (2.5: a Raster): its footprint is the image
+  of its corners through the GCP transform gdalwarp uses, its properties have `gcps` (their count) and no
+  `geotransform`, and its COG is warped with that transform. A complex raster (CInt16, CInt32, CFloat32,
+  CFloat64) keeps its samples in its COG; its statistics, tiles and thumbnail are those of the magnitude of its
+  samples (a thumbnail takes the magnitude of the nearest sample).
+  The COPC of a point cloud (the build of a PointCloud entry, `ddb copc`) is built by ddb-tilers in the raster
+  helper (`gdal-util`, protocol 1.1, operation `copc`), on the threads of the build (`DDB_BUILD_THREADS`, lowered by
+  the `threads` of `DDBBuildEx`) and within `DDBT_COPC_BUILD_MEM_MB` (default 4 GiB, at most half the memory): a
+  larger cloud spills to the build folder. It reads LAS, LAZ, E57, PTS, XYZ and PLY point clouds itself, with no
+  conversion to a temporary LAS. The point count and the bounds are those of the sources; the file differs from the
+  COPC of 2.5: another octree (the same file whatever the threads and the memory), LAS 1.4 point format 6, 7 with
+  colours or 8 with near infrared (a cloud without colours no longer has zero colours, so its `dimensions` have no
+  `Red`, `Green`, `Blue`), the scale and offset of a single LAS source (else finer ones than the 0.01 of 2.5), and
+  the 8-bit colours and intensities of PLY, PTS and XYZ sources scaled to 16 bits. A cloud of one point, or of no
+  extent in one or two axes (a vertical line, a wall), has a COPC whose octree cube is its largest extent plus one
+  scale step on each side, a thumbnail with its points at the centre and map tiles (2.5 refused fewer than 2 points
+  or no extent in X or Y with `DDBERR_INVALIDARGS`); a cloud without any point is a cloud that cannot be read
+  (`DDBERR_EXCEPTION`, "the input holds no points"). A full disk during the build is a retryable failure.
+  `DDBBuildEx2` reports the phases of a point cloud build: "planning" from 0, "reading" from 0.05, "building" from
+  0.4 and "writing" when the file is done (2.5: fraction -1 until it was done). `DDB_UNTWINE_PATH`,
+  `DDB_USE_PDAL_COPC` and `DDB_COPC_BACKEND`, which chose between Untwine and PDAL's writers.copc in 2.5, are no
+  longer read, and the packages have no Untwine.
+
+* 2026-11-16: 2.7.0 (ABI 2.7: `capabilities` has `abi.minor` 7; no export is added or removed, no schema or
+  other fixture changes).
+  The images that libddb renders itself, the region and index renders (`DDBRenderRasterRegionEx*`,
+  `DDBRenderRasterIndex*`) and the thumbnails, are encoded by ddb-tilers with the encoders and rules of the tiles
+  instead of GDAL's PNG, JPEG and WEBP drivers. A PNG decodes to the pixels of 2.6 and JPEG is the same bytes; an
+  alpha that is 255 everywhere is no longer written (an opaque render is an RGB or grey PNG instead of RGBA or
+  grey + alpha, often half the size); WebP is encoded as the WebP tiles are (libwebp method 1 instead of 2: the
+  pixels differ by a few levels at the same quality, PSNR within 0.3 dB, and the files are up to 20 % larger).
+  The "rgba" pixels of a render are unchanged, but for a raster with a colour table: its render shows the colours
+  of its classes in every format, resampled with the nearest pixel (2.6 showed the indices as grey in PNG and JPEG, and
+  blended neighbouring classes with a bilinear warp).
+  Whether a raster is already an optimized COG (EPSG:3857, square tiles of 256 or 512 pixels, overviews), which
+  names the phases a COG build reports, is the rule of ddb-tilers' builder (`ddbtIsOptimizedCog`) instead of a
+  second GDAL check of the same rule, so the phases follow what the build does.
+  The info of a point cloud of a user (LAS, LAZ, E57, XYZ, PTS: its point count, CRS, dimensions and footprint)
+  is read by ddb-tilers in the raster helper (`gdal-util`, protocol 1.2, operation `pointCloudInfo`) instead of
+  PDAL in the process of libddb; a PLY point cloud is read from its header as before. The properties are those
+  of 2.6 (the same count, the dimensions PDAL names in its order, the CRS as the file states it), but for a CRS
+  of GeoTIFF keys without an EPSG code for the whole of it: the same CRS, its WKT without GDAL's AUTHORITY nodes,
+  and a GeographicType of 4978 read as WGS 84 (2.6: GDAL's geocentric CRS, whose footprint was at the pole).
+  A helper of protocol 1.1 is refused (HelperUnavailableException), as for every protocol change.
+  The training export of Gaussian splats (`ddb gsplat --training-data`, `DDBExportSplatTraining`) takes the sample
+  of the point cloud of the ODM project from the raster helper (operation `sampleCloud`), which reads the LAS, LAZ
+  or PLY file with ddb-tilers instead of PDAL and the export's own PLY reader in the process of libddb: the same
+  `points3D.bin` byte for byte (4 ODM projects checked), in 40 to 71 % of the time of 2.6 (the points are decoded
+  on several threads); a PLY that is not binary little-endian is now read too.
+  libddb no longer links PDAL: the info of a point cloud, the sample of the splat export and the COPC builds and
+  tiles all read clouds with ddb-tilers, and PDAL, its plugins and the vcpkg ports only it needed (libE57Format,
+  xerces-c, eigen3, h3, nanoflann, rapidxml, crcpp, json-schema-validator) leave the packages. The diagnostics
+  print the version of ddb-tilers instead of PDAL's. `PDALException` and the add error code "PDAL" stay: they
+  are what a point cloud that cannot be read throws and reports, as before.
+  The rasters libddb reads in its process (the COG of a build, the copy of a user's raster that the raster helper
+  writes) are read by ddb-tilers instead of GDAL: the values, statistics, formulas, exports, region and index
+  renders and the sensor and thermal detections are those of 2.6 (checked against GDAL bit for bit), but a few:
+  the GeoTIFF of a region render (WCS) is DEFLATE-compressed (smaller files, the same samples); a raster whose CRS
+  is a WKT that is not its authority's definition can differ by one float step in one sample per render; and
+  rasters of 1-bit, Float16 and 64-bit integer samples are read, rendered and exported where 2.6 failed on them.
+  The operations on users' rasters run in the raster helper on the file of the user, instead of GDAL in the
+  process of libddb on a normalized copy of it, which is no longer written: the mask of borders
+  (`DDBMaskBorders*`), the photos of the training export of splats, the multispectral merge, its preview and
+  validation (`DDB*MergeMultispectral*`) and the alignment and its validation (`DDBAlignRaster*`,
+  `DDBValidateAlignRaster`). Their outputs are those of 2.6 byte for byte. A raster helper of protocol 1.3 is
+  required (operations `mask`, `rasterShapes`, `resizeImages`, `mergeBands`, `mergePreview`, `align`,
+  `alignValidation`; error kind `invalid`, which keeps `DDBERR_INVALIDARGS` for the arguments an operation
+  refuses). The mask of a raster of one band of more than 8 bits (a DEM, a thermal raster) keeps its type and
+  every sample, with the mask nearblack computes from them and NoData masked too (2.6 cut the samples to 8 bits,
+  and failed on Float32 and Float64); its border colour is one number. The message of a mask GDAL cannot write
+  names the output by its file. The scratch rasters of an alignment are written in a private folder beside its
+  output instead of the cache. The process of libddb opens no raster with GDAL.
+  The 3D Tiles of models are built by Obj2Tiles v1.10.1, whose KTX2 encoder (libktx 5.0.0-rc2) no longer hangs at
+  the end of a multi-threaded encode.
+* 2026-11-16: 2.7.1 (ABI 2.7, a patch: no export is added or removed, `capabilities` is unchanged and no schema or
+  fixture changes).
+  The GeoTIFFs libddb writes with ddb-tilers again have what GDAL's tools copied from the raster in 2.6.0, which
+  2.7.0 lost (the pixels were the same). The export of bands (`DDBExportRaster3` without a formula) has what
+  gdal_translate copies: the metadata items of the raster (but `TIFFTAG_MINSAMPLEVALUE` and
+  `TIFFTAG_MAXSAMPLEVALUE`, `CACHE_PATH`, `NITF_BLOCKA_*` of a window and `NODATA_VALUES` unless every band is
+  exported in its order) and its XMP; for each band its items (but its statistics when the values are scaled or a
+  window is exported), its scale and offset, its unit (only when its statistics are kept) and its description; and
+  the colour table of a palette band, with overviews averaged in the colours of the table as GDAL averages a
+  palette band (a palette raster with an internal mask is exported without its table). The GeoTIFF of a region
+  render (`DDBRenderRasterRegionEx*`, WCS) has what gdalwarp copies: the metadata items of the raster (but
+  `CACHE_PATH`, and `NODATA_VALUES` beside an alpha band), the scale and offset of each band, and when the render has
+  as many bands as the raster the items, description and unit of each band. A raster whose pixels are points
+  (`AREA_OR_POINT=Point`) is exported where it is (2.7.0 wrote every export of it half a pixel away) and its region
+  GeoTIFF says so. `DDBRenderRasterIndex*` with "image/tiff" or "image/geotiff" gives an uncompressed TIFF of the RGBA
+  pixels without georeferencing again (2.7.0 gave a PNG). A point cloud the raster helper cannot read is again a
+  `PDALException`, the add error code "PDAL", for its info and the sample of the splat training export (2.7.0 gave
+  "GDAL"), as for its COPC build.
+* 2026-11-16: 2.7.2 (ABI 2.7, a patch: no export is added or removed, `capabilities` is unchanged and no schema or
+  fixture changes).
+  Palette and masked rasters are written as 2.6.0 wrote them with GDAL's tools. The export of bands keeps the mask
+  gdal_translate keeps (band 1's own, `GMF_PER_DATASET`: an internal mask, beside an alpha band too) and the colour
+  table of band 1 for 1 or 2 bands whatever the mask, with the overviews of GDALBuildOverviews AVERAGE: a palette band
+  beside an internal mask or an alpha band computed from the full resolution for every level, the mask and the alpha
+  band beside a palette regenerated in GDAL's chunks of rows (by blocks past 10 MiB). 2.7.0 and 2.7.1 exported a
+  palette raster with a mask or an alpha band without its table, an RGBA raster without its internal mask, and the
+  overviews of a mask wider than 10240 pixels differently where its rows cross a chunk. The colour table of a raster
+  of 2 samples (a palette band and an alpha band) is read, so its renders and thumbnails show its colours (2.7.0 and
+  2.7.1: grey), and the COG of a palette raster beside an alpha band or with an internal mask keeps its table
+  (2.6.0 to 2.7.1 dropped it). The 3D Tiles of models are built by Obj2Tiles v1.10.2 (the same binaries as v1.10.1;
+  its notices list libktx and the code it is built from).
+* 2.8.0 (no export added or removed): point clouds in any CRS. The entry `properties` of a point
+  cloud gain `crsStatus` (`projected`, `geographic`, `geocentric`, `local`, `none`, `implausible`; the `add`,
+  `list`, `list-entries`, `info-pointcloud`, `info-pointcloud-no-footprint`, `stac-item-collection` and
+  `stac-data-item-collection` fixtures have it), and the `pointcloud.copc` artifact gains `crs` (new fixture
+  `build-artifacts-pointcloud`; `build-artifacts.schema.json` has the member). A CRS the coordinates do not fit is
+  ignored: no footprint, `warning` "coordinate system ignored: the coordinates do not fit <name>", and a COPC that
+  states no CRS (no `crs` in the manifest). The COPC of a
+  geographic or geocentric cloud is built in a metric projected CRS (UTM of the centre of its footprint, on its
+  datum when EPSG has one; UPS near the poles; a centred transverse Mercator for a cloud that reaches more than 4.5
+  degrees from the central meridian of that zone; a
+  compound source keeps its vertical CRS in metres; a geocentric or 3-D geographic one the ellipsoidal height), with
+  `copc/build.json` beside it; such a COPC built before (and one of an implausible CRS) is incomplete for `DDBIsBuildComplete` and the build
+  objects, and is built again by the next `DDBBuild`. The footprint of a geocentric cloud is the envelope of its
+  points, transformed in 3-D; the polygon of a cloud across the antimeridian has its east past 180 (never a ring
+  around the globe). A projected CRS is implausible only when PROJ cannot take its corners to WGS 84 or they land 30
+  degrees or more outside its area of use. The raster helper speaks protocol 1.4 (`pointCloudInfo` gains `crsStatus` and
+  `targetCrs`, `copc` takes `targetCrs` or `dropCrs` and answers the octree its builder reports); a helper of 1.3 is refused.
+  `entry-types`: the `Vector` type gains the sidecars `xsd` and `gfs` (the schemas of a GML, now indexed as a
+  `Vector`); no other fixture changed.
+  `ddb tile` writes and reads XYZ rows (row 0 in the north), as its help says, and TMS rows with `--tms`, for
+  the rows of `-x`/`-y` and for the folders it writes (`<z>/<x>/<y>.png`), for rasters and point clouds; 2.0 to 2.7
+  did the opposite. `DDBTile` and `DDBMemoryTile*` keep their flag (`tms` true: `ty` is an XYZ row).
+  A `.cog` file is a raster as a `.tif` is (a `GeoRaster` with a CRS, else an `Image`; it was `Generic`), and its
+  STAC media type is `image/tiff`.
+  The thumbnail of a raster has the shape of the raster on the ground (the size of a pixel in its geotransform):
+  a raster of 5 x 5000 pixels of 240 x 0.24 m has a thumbnail of 512 x 512, no longer 1 x 512.
+  A `ddb` command whose input the library refuses (`DDBERR_INVALIDARGS` while it works) prints the message alone,
+  without the usage of the command; an argument it cannot read (an option, a format, a filter) still prints both.
+  ddb-tilers 0.13.3 changes what the COG of a GeoRaster holds and how tiles are drawn (no schema or fixture
+  changed): a source without nodata, mask or alpha band gets an internal mask of the pixels the warp writes (the
+  padding up to the tiles of the grid and the corners of a rotated raster were opaque 0, in the statistics too);
+  the nodata of several bands comes with an internal mask of the pixels where not every band is at nodata (a pixel
+  whose first band alone was at nodata was transparent); a palette is warped by nearest neighbour; a graded alpha
+  is kept in an 8-bit mask. Tiles show the pixel under the centre of each tile pixel (the corrected tiler mode,
+  now the default; `DDBT_TILER_MODE=compat` keeps the tiles of 2.4.1), a palette band in its colours, NaN
+  transparent, two bands as red and green, and keep drawing far above the resolution of the raster; a tile that
+  no pixel of the raster is under is blank, whatever the formula asked. Point-cloud tiles have no gaps where the
+  cloud has points. A nodata override (`DDB_RASTER_OPT_NODATA`) makes the pixels where every band is at that
+  value transparent in the band tiles of a COG with an internal mask too (with ddb-tilers 0.13.1 it had no effect
+  on the COGs that now get one). A floating-point band whose values differ only by the rounding of the warp (a
+  constant raster, within 2^-42 of its value) is drawn as a constant band, black, not as grey noise. bm3d is
+  1.1.3 and the 3D Tiles of models are built by Obj2Tiles v1.10.3 (OBJ models whose parts differ are tiled whole; KTX2 textures are a multiple of 4 in size).
+  The entry `properties` of a GeoRaster gain `hasMask` (true when the raster has a mask of its own, an internal or
+  external mask that is neither its alpha band nor its nodata) and, in each band, `noData` when the band has one
+  (a number, or `"nan"`, `"inf"`, `"-inf"`; a GeoTIFF has one nodata for every band, its alpha band too); the
+  `add`, `list`, `list-entries`, `info-georaster`, `stac-item-georaster`, `stac-item-collection`,
+  `stac-data-item-georaster`, `stac-data-item-collection` and `gdal-util-probe` fixtures have `hasMask`
+  (`entry.schema.json` and `gdal-util-probe.schema.json` have both members). The COG of a GeoRaster has
+  `cog/build.json` beside it (`{"version": 1}`, the version of the COG build rules); a COG without it (built
+  before 2.8.0) is incomplete for `DDBIsBuildComplete` and the build objects of `DDBGetBuildArtifacts`,
+  `DDBListEntriesEx` and `DDBGetBuildStatus`, and is built again by the next `DDBBuild`, only when the COG built
+  now differs from it: a source without nodata, mask or alpha band, a source with the nodata of several bands and
+  no alpha band, a source with a colour table (a `Palette` band 1), and a COG that lies elsewhere than its raster.
+  An entry indexed by 2.8.0 is judged from its `bands` and `hasMask`; one indexed before from the colour
+  interpretations of its bands (a palette or an alpha band) and otherwise from the header of the COG it has (its
+  nodata, mask and alpha band, which the builds before kept from the source). A COG these facts find healthy is
+  read (its header) to check its place: it is outdated when a corner of the entry's footprint (`polygon_geom`, a
+  latitude past 85.0511 taken at 85.0511) is outside its grid by more than 4 of its pixels; the builds before put the
+  COG of some GeoTIFFs tens to thousands of kilometres away (NTF Paris with its prime meridian in grads, an EPSG CRS
+  whose linear unit the file changes to feet or US feet, an IMAGINE citation that names a unit) and cut the COG of
+  a raster around a pole at the latitude of its edges. A COG found in its place gets a `cog/build.json` of its
+  check, `{"origin": "verified", "version": 1}`, written by the query that checked it (under the build lock of
+  the folder, atomically; not while a build holds the lock, nor in a folder that cannot be written, which is
+  checked again next time), so its header is read once. A COG that cannot be read is incomplete.
+  A build records warnings about the output it made in the `warning` and `warningCode` of its entry
+  (`entry.schema.json`): `3dtiles-not-generated` when the 3D Tiles of a model could not be made (the bm3d output
+  was; `warning` "3D Tiles not generated: <reason>", the reason the tiler gave), `textures-outside-dataset` when the
+  MTL files of an OBJ name textures that are absolute or outside the dataset (`warning` "Textures outside the dataset
+  left out: <references>"). Such an OBJ is built without them (its materials keep their colours); 2.7 failed its
+  build. One line of `warning` for each, the code of the first; they replace the warning of the entry, a later
+  build without them removes them, and a parse of the same content (a rescan) keeps them. A glTF material with
+  `alphaMode` MASK or BLEND reaches bm3d as a cutout (`map_d` naming its texture in the OBJ it is converted to).
+  The build warnings change no export, fixture or other schema.
+  The `bounds.json` of a built Gaussian splat (`gsplat.bounds`) gains `framing` (additive): `{"kind": "object" |
+  "scene" | "site", "core": [minX, minY, minZ, maxX, maxY, maxZ]}`, the kind of capture (the cameras went round a
+  subject, were inside a room, or looked down on a piece of ground; a georeferenced splat is a `site`) and the box
+  of its core in the frame of `model.rad`, from a sample of every splat of the model. It is missing for fewer than
+  16 splats and in the `bounds.json` of earlier builds. No fixture changed for it.
+* 2.8.1 (no export added or removed): ddb-tilers 0.13.4 draws a point cloud zoomed in past its density as a surface
+  in the modern tiles: the disc of each point grows with the distance to its 4th nearest point (at most 32 px), so
+  the map no longer shows the basemap between the points of the deepest level (an ODM cloud of 0.45 m spacing: 512
+  px tiles 7 % covered at z22 before, 100 % now). Hybrid and compat tiles and thumbnails are unchanged. The 3D Tiles
+  of models are built by Obj2Tiles v1.10.4. A textured OBJ whose statements are indented with a tab (ODM writes
+  `\tmtllib odm_textured_model_geo.mtl`) is tiled: v1.10.3 dropped its material library from the levels it decimated
+  (models of 10K faces or more) and failed with "Material material0000 not found", so the model had a bm3d build and
+  no 3D Tiles. No fixture changed for it.
+* 2.9.0 (ABI 2.9: `capabilities` has `abi.minor` 9, and `DDBRescanEx2` in `symbols`, not in `cancellable`): the
+  rescan of the entries a list of entry paths names. A file is that entry, a folder the entries below it, and the
+  type and extension filters of `DDBRescanEx` still apply; no paths is the whole index, as `DDBRescanEx`. The output
+  elements are those of `DDBRescanEx`. A path not in the index is an element `{path, error: "Not in index: <path>",
+  success: false}`, reported before any entry is re-read. With paths each entry is parsed outside the writer lock of
+  the index and written on its own, so the dataset stays usable during the rescan. No other fixture or schema
+  changed.
+* 2.10.0 (ABI 2.10: `capabilities` has `abi.minor` 10, and `DDBFindCoverage` in `symbols`, not in `cancellable`): the
+  images that see a place. `DDBFindCoverage(ddbPath, geometryJson, optionsJson, output)` takes a GeoJSON Point,
+  LineString or Polygon in EPSG:4326 and the options `{"limit": 1..100}` (default 20), and returns the geotagged
+  images whose footprint intersects it as `[{path, score, overlap, pixel}]`, by ascending `score` and then `path`.
+  `score` is the distance in metres from the centroid of the geometry to the centroid of the footprint over the
+  diagonal of the footprint; `overlap` is the part of a polygon the footprint covers, 1 for a point or a line; `pixel`
+  is `[x, y]` of the centroid of the geometry in the image, or null when the camera parameters of the image are
+  missing or it is outside the image. An argument that is wrong (bad JSON, another type of geometry, a position out of
+  range, a polygon that is not valid, a geometry whose longitudes span more than 180 degrees (one across the
+  antimeridian) or that is too large to be projected in the UTM zone of its middle, an unknown option, a limit out of
+  range) is `DDBERR_INVALIDARGS`. The footprint of an image is unchanged: the camera model it is made with is now
+  shared with the pixel estimate. `info-pointcloud-no-footprint`: the `warning` of a point cloud in a local CRS says
+  that the CRS is local, `footprint unavailable: the file's coordinate system ("Site grid") is a local one, with no
+  position on the earth`, instead of `footprint unavailable: No coordinate transformation from Site grid to EPSG:4326`
+  (Agisoft Metashape names its site frame "WGS 84", so the former read "from WGS 84 to EPSG:4326"); ddb-tilers 0.13.5
+  refuses the tiles of such a cloud with the same words. Same field and type. No other fixture or schema changed.
+* 2.11.0 (ABI 2.11: `capabilities` has `abi.minor` 11, and `DDBBuildRasterStatistics` in `symbols` and in
+  `cancellable`): the statistics of rasters without waiting for them. `raster-info` has the `algorithms`, `colormaps`
+  and `autoBands` of `raster-metadata` without a band filter, from the metadata of the raster alone (no pixel read),
+  so a host lists the formulas at once; `raster-info.schema.json` has the three members, required. The exact
+  statistics of a raster ddb-tilers reads are one parallel pass over every band (ddb-tilers 0.14.0
+  `ddbtRasterStatistics`) with the arithmetic of the sidecar of a COG build (exact sums), instead of one serial pass
+  per band: `raster-metadata` has the correctly rounded means (126.0 where it had 125.99999999999999) and its
+  percentiles follow; same fields. `DDBBuildRasterStatistics(ddbPath, entryPath, optionsJson, progress, userData,
+  output)` writes the statistics of the COG of a built GeoRaster next to it when it has none (a COG built before
+  2.4), `{"threads": n}`, and returns `{"status": "computed" | "present" | "notBuilt"}`; the `raster.cog` artifact of
+  `build-artifacts` and `list-entries-ex` has `"statistics": true | false` (`build-artifacts.schema.json`). No other
+  fixture or schema changed.
+* 2.12.0 (ABI 2.12: `capabilities` has `abi.minor` 12, and `DDBGetRasterValueInfoEx2` in `symbols` and in
+  `cancellable`): the statistics of the uploaded file of a GeoRaster are counted by its COG build, in the same pass,
+  and kept next to the COG (`<cog>.source.stats.json`, the schema of the sidecar). The `raster.cog` artifact of
+  `build-artifacts` and `list-entries-ex` has `"sourceStatistics": true | false` (`build-artifacts.schema.json`).
+  `DDBGetRasterValueInfoEx2(ddbPath, entryPath, options, output)` gives the output of `DDBGetRasterValueInfoEx` for
+  the file of an entry and takes those statistics instead of reading the pixels, when the file is still the one the
+  entry was indexed from. `DDBBuildRasterStatistics` also writes them for a COG built without them (`present` only
+  when both are there). The raster helper speaks protocol 1.5 (the `statistics` operation, `sourceStatistics` of
+  `cog`). No other fixture or schema changed.
+* 2.13.0 (ABI 2.13: `capabilities` has `abi.minor` 13, and `DDBCleanupCache` in `symbols` and in `cancellable`):
+  libddb keeps no artefact cache. A GeoTIFF of a user that ddb-tilers reads whole (the raster helper decodes every
+  block of every level once, the `validate` operation of protocol 1.6) is read in place; any other raster through a
+  copy that lives as long as its reader. The setting `artefactCacheMb` of `effective-config` is retired: accepted,
+  checked and reported, with no effect, default 0 (`effective-config.schema.json` says so).
+  `DDBCleanupCache(optionsJson, output)` removes what the cache and the temporary folder kept past an age and
+  returns `{"dryRun", "kinds": {kind: {"entries", "bytes"}}}` (`cache-cleanup.schema.json`, fixture
+  `cache-cleanup`). The tiles of a photo are drawn from the photo for each tile by the raster helper (the
+  `photoTile` operation); nothing of a photo is kept. The raster helper speaks protocol 1.6. No other fixture or
+  schema changed.
+* 2.13.1 (ABI 2.13, a patch: no export is added or removed, `capabilities` is unchanged and no schema or fixture
+  changed): the `temp` kind of `DDBCleanupCache` also counts the temporary files the GDAL COG driver of earlier
+  versions left in the temporary folder when a COG build was stopped (`cog.tif_<pid>_<counter>`, about the size of
+  the COG).

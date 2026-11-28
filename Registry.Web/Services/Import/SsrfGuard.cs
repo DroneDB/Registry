@@ -1,11 +1,11 @@
-#nullable enable
 using System;
 using System.Linq;
 using System.Net;
-using System.Net.Sockets;
 using System.Threading;
 using System.Threading.Tasks;
+using Microsoft.Extensions.Logging;
 using Registry.Web.Models.Configuration;
+using Registry.Web.Utilities;
 
 namespace Registry.Web.Services.Import;
 
@@ -17,15 +17,26 @@ namespace Registry.Web.Services.Import;
 /// </summary>
 public sealed class SsrfGuard
 {
-    private static readonly IPAddress MetadataEndpoint = IPAddress.Parse("169.254.169.254");
+    /// <summary>
+    /// What the user is told when the address of a source is local or private (FR-UPL-19): why, and what to do, without
+    /// the technical detail (the resolved address stays in the log). <paramref name="host"/> is the host as the user typed it.
+    /// </summary>
+    public static string BlockedHostMessage(string host) =>
+        $"This server cannot import from local or private network addresses ({host}). Use the public address of the registry.";
 
     private readonly ImportSettings _settings;
+    private readonly ILogger<SsrfGuard>? _logger;
 
     /// <summary>
     /// Initializes a new instance of the <see cref="SsrfGuard"/> class.
     /// </summary>
     /// <param name="settings">Import settings carrying the SSRF allow-list and toggles.</param>
-    public SsrfGuard(ImportSettings settings) => _settings = settings;
+    /// <param name="logger">Where a refused address is logged, with the address it resolved to.</param>
+    public SsrfGuard(ImportSettings settings, ILogger<SsrfGuard>? logger = null)
+    {
+        _settings = settings;
+        _logger = logger;
+    }
 
     /// <summary>
     /// Throws <see cref="ArgumentException"/> if the hostname resolves to a blocked address.
@@ -91,47 +102,22 @@ public sealed class SsrfGuard
         (_settings.SsrfAllowedHosts is { Length: > 0 } allowed &&
          allowed.Contains(host, StringComparer.OrdinalIgnoreCase));
 
-    private static void AssertAddressesAllowed(string host, IPAddress[] addresses)
+    private void AssertAddressesAllowed(string host, IPAddress[] addresses)
     {
         foreach (var addr in addresses)
         {
-            if (IsBlocked(addr))
-                throw new ArgumentException(
-                    $"Requests to private or reserved IP addresses are not allowed ('{host}' -> {addr}).");
+            if (!IsBlocked(addr))
+                continue;
+
+            // The host and the address are for the log; the user gets the plain message
+            _logger?.LogWarning("Import refused: '{Host}' resolves to the private or reserved address {Address}", host, addr);
+            throw new ArgumentException(BlockedHostMessage(host));
         }
     }
 
-    private static bool IsBlocked(IPAddress addr)
-    {
-        // Normalize IPv4-mapped IPv6 (::ffff:a.b.c.d) to IPv4 so the IPv4 rules below also catch it;
-        // otherwise an attacker could reach internal services via the mapped form.
-        if (addr.IsIPv4MappedToIPv6)
-            addr = addr.MapToIPv4();
-
-        return IPAddress.IsLoopback(addr)
-            || addr.IsIPv6LinkLocal
-            || addr.IsIPv6SiteLocal
-            || IsIPv6UniqueLocal(addr)
-            || addr.Equals(MetadataEndpoint)
-            || IsPrivateIPv4(addr);
-    }
-
-    // IPv6 Unique Local Address (fc00::/7, RFC 4193) - the modern private IPv6 range. IsIPv6SiteLocal
-    // only covers the deprecated fec0::/10, so ULA (e.g. fd00::/8, and the AWS IPv6 metadata endpoint
-    // fd00:ec2::254) must be checked explicitly.
-    private static bool IsIPv6UniqueLocal(IPAddress addr)
-        => addr.AddressFamily == AddressFamily.InterNetworkV6
-           && (addr.GetAddressBytes()[0] & 0xFE) == 0xFC;
-
-    private static bool IsPrivateIPv4(IPAddress addr)
-    {
-        if (addr.AddressFamily != AddressFamily.InterNetwork)
-            return false;
-
-        var b = addr.GetAddressBytes();
-        return b[0] == 10
-            || (b[0] == 172 && b[1] >= 16 && b[1] <= 31)
-            || (b[0] == 192 && b[1] == 168)
-            || (b[0] == 169 && b[1] == 254); // link-local / cloud metadata
-    }
+    /// <summary>
+    /// Whether <paramref name="addr"/> is a local, private or reserved address, the cloud metadata address
+    /// included (<see cref="ReservedAddresses"/>).
+    /// </summary>
+    internal static bool IsBlocked(IPAddress addr) => ReservedAddresses.IsNonPublic(addr);
 }

@@ -1,10 +1,6 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Threading.Tasks;
-using Newtonsoft.Json;
-using Newtonsoft.Json.Converters;
-using Registry.Web.Identity.Models;
+using System;
+using System.Text.Json.Serialization;
+using Registry.Ports.Json;
 
 namespace Registry.Web.Models;
 
@@ -13,12 +9,12 @@ public class AuthenticateResponse
     public string Username { get; }
     public string Token { get; }
 
-    [JsonConverter(typeof(UnixDateTimeConverter))]
+    [JsonConverter(typeof(UnixSecondsConverter))]
     public DateTime Expires { get; }
         
-    public AuthenticateResponse(User user, string token, DateTime expires)
+    public AuthenticateResponse(string username, string token, DateTime expires)
     {
-        Username = user.UserName;
+        Username = username;
         Token = token;
         Expires = expires;
     }
