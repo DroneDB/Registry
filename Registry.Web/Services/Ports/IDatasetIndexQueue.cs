@@ -23,7 +23,9 @@ public interface IDatasetIndexQueue
     /// <summary>
     /// Enqueues several files as one logical unit, with the hashes computed while they were
     /// written, on behalf of an upload started with <see cref="BeginUpload"/> (or none). Each
-    /// file gets its own outcome: one that fails does not fail the others.
+    /// file gets its own outcome: one that fails does not fail the others. At the deadline and at the shutdown of
+    /// the queue too: a file no batch took is never indexed (a transient error), one a batch is still writing is
+    /// <c>IndexWritePendingException</c>; only a cancellation through <paramref name="ct"/> throws.
     /// </summary>
     Task<IReadOnlyList<IndexOutcome>> EnqueueAsync(DatasetKey dataset, IReadOnlyList<AddItem> items,
         UploadTicket? upload, CancellationToken ct = default);

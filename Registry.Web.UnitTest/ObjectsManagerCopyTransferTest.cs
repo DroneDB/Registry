@@ -308,6 +308,32 @@ public class ObjectsManagerCopyTransferTest : TestBase
         operations.IndexOf("fs-move-to-trash").ShouldBeLessThan(operations.IndexOf("ddb-remove"));
     }
 
+    /// <summary>
+    /// A copy over the dataset cover whose thumbnail cache cannot be invalidated (the cache store is down): the copy is
+    /// committed, so it stays and the request succeeds (red before: the failure after the commit rolled the copy back
+    /// while the replaced cover had already left the trash, so neither was left).
+    /// </summary>
+    [Test]
+    public async Task Copy_WhoseThumbnailCacheCannotBeInvalidated_KeepsTheCommittedCopy()
+    {
+        const string cover = "cover.jpg";
+        _ddbMock.Setup(x => x.GetEntry("src.jpg"))
+            .Returns(new Entry { Path = "src.jpg", Type = EntryType.Generic, Size = 10, Hash = "hs" });
+        _ddbMock.Setup(x => x.GetEntry(cover))
+            .Returns(new Entry { Path = cover, Type = EntryType.Generic, Size = 10, Hash = "hc" });
+        _ddbMock.Setup(x => x.EntryExists(cover)).Returns(true);
+        _fsMock.Setup(x => x.Exists(It.IsAny<string>())).Returns(true);
+        _fsMock.Setup(x => x.FolderExists(It.IsAny<string>())).Returns(false);
+        _cacheManagerMock.Setup(x => x.RemoveByCategoryAsync(It.IsAny<string>(), It.IsAny<string>()))
+            .ThrowsAsync(new IOException("The cache store is down"));
+
+        await CreateManager().CopyAsync(OrgSlug, DsSlug, "src.jpg", cover, overwrite: true);
+
+        // Once: the replaced cover leaves the index when the copy takes its place, never again by a rollback
+        _ddbMock.Verify(x => x.Remove(cover), Times.Once);
+        _fsMock.Verify(x => x.Delete(Path.Combine(DatasetFolder, cover)), Times.Never);
+    }
+
     // ---------------------------------------------------------------------
     // Transfer
     // ---------------------------------------------------------------------
@@ -354,8 +380,32 @@ public class ObjectsManagerCopyTransferTest : TestBase
         await mgr.TransferAsync(OrgSlug, DsSlug, sourcePath, OrgSlug, OtherDsSlug,
             destPath: destPath, overwrite: false, keepSource: false);
 
-        _ddbMock.Verify(x => x.Remove(sourcePath), Times.Once);
+        _ddbMock.Verify(x => x.Remove(It.Is<IReadOnlyList<string>>(p => p.SequenceEqual(new[] { sourcePath }))), Times.Once);
         _otherDdbMock.Verify(x => x.AddRaw(destPath), Times.Once);
+    }
+
+    /// <summary>
+    /// A move of the dataset cover whose thumbnail cache cannot be invalidated afterwards: the move is complete, so the
+    /// request succeeds (red before: it answered 500, and the client retrying it met a source that was gone).
+    /// </summary>
+    [Test]
+    public async Task Transfer_WhoseThumbnailCacheCannotBeInvalidated_Succeeds()
+    {
+        const string cover = "cover.jpg";
+        _ddbMock.Setup(x => x.GetEntry(cover))
+            .Returns(new Entry { Path = cover, Type = EntryType.Generic, Size = 10, Hash = "hc" });
+        _otherDdbMock.Setup(x => x.GetEntry(cover)).Returns((Entry?)null);
+        _otherDdbMock.Setup(x => x.EntryExists(cover)).Returns(true);
+        _fsMock.Setup(x => x.Exists(It.IsAny<string>())).Returns(true);
+        _fsMock.Setup(x => x.FolderExists(It.IsAny<string>())).Returns(false);
+        _cacheManagerMock.Setup(x => x.RemoveByCategoryAsync(It.IsAny<string>(), It.IsAny<string>()))
+            .ThrowsAsync(new IOException("The cache store is down"));
+
+        await CreateManager().TransferAsync(OrgSlug, DsSlug, cover, OrgSlug, OtherDsSlug, destPath: cover,
+            overwrite: false, keepSource: false);
+
+        _otherDdbMock.Verify(x => x.AddRaw(cover), Times.Once);
+        _otherDdbMock.Verify(x => x.Remove(It.IsAny<string>()), Times.Never);
     }
 
     /// <summary>
@@ -382,7 +432,7 @@ public class ObjectsManagerCopyTransferTest : TestBase
         await CreateManager().TransferAsync(OrgSlug, DsSlug, path, OrgSlug, OtherDsSlug,
             destPath: path, overwrite: false, keepSource: false);
 
-        _ddbMock.Verify(x => x.Remove(path), Times.Once);
+        _ddbMock.Verify(x => x.Remove(It.Is<IReadOnlyList<string>>(p => p.SequenceEqual(new[] { path }))), Times.Once);
         _fsMock.Verify(x => x.Delete(sourceFile), Times.Once);
         _otherDdbMock.Verify(x => x.AddRaw(path), Times.Once);
         _otherDdbMock.Verify(x => x.Remove(It.IsAny<string>()), Times.Never);

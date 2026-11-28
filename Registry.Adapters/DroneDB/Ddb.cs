@@ -195,6 +195,16 @@ public class DDB : IDDB
         }, ex => $"Cannot remove '{path}' from ddb '{DatasetFolderPath}'");
     }
 
+    public void Remove(IReadOnlyList<string> paths)
+    {
+        ArgumentNullException.ThrowIfNull(paths);
+        if (paths.Count == 0)
+            return;
+
+        Wrap(() => Wrapper.Remove(DatasetFolderPath, [.. paths.Select(GetLocalPath)]),
+            ex => $"Cannot remove {paths.Count} path(s) from ddb '{DatasetFolderPath}'");
+    }
+
     public void Move(string source, string dest)
     {
         Wrap(() => Wrapper.MoveEntry(DatasetFolderPath, source.ToDdbPath(), dest.ToDdbPath()),

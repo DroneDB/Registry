@@ -46,6 +46,8 @@ public sealed class UploadCommitter
 
         var outcomes = new UploadPartOutcome?[parts.Count];
         var moved = new List<(int Index, MovedUploadPart Part)>();
+        var sizes = new long[parts.Count];
+        var settled = false;
         try
         {
             await _receipts.SetStateAsync(ctx, UploadReceiptState.Committing, null);
@@ -54,7 +56,6 @@ public sealed class UploadCommitter
             // to its normalized path, in the letter case of the entry it replaces (D-040). The name is checked
             // again here, so a file written since the part's first byte still refuses it
             var valid = new List<int>();
-            var sizes = new long[parts.Count];
             var targets = new string[parts.Count];
             var claimed = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             for (var i = 0; i < parts.Count; i++)
@@ -110,12 +111,12 @@ public sealed class UploadCommitter
                 }
             }
 
+            // The quota keeps the files that stay in the dataset: the indexed ones and those whose index write is
+            // still running (the batch lists them when it commits)
+            settled = true;
+            SettleReservation(ctx, moved, sizes);
+
             var indexed = moved.Where(m => m.Part.Entry != null).ToArray();
-            if (indexed.Length > 0)
-            {
-                ctx.Reservation?.Resize(indexed.Sum(m => sizes[m.Index]));
-                ctx.Reservation?.Commit();
-            }
 
             // Post-index finalization: the entries are committed, failures here never quarantine
             await _finalizer.FinalizeAsync(ctx, indexed.Select(m => m.Part).ToArray());
@@ -125,10 +126,14 @@ public sealed class UploadCommitter
         catch (Exception ex)
         {
             // Request-level failure (quota, a native outage, a canceled index write): a file already
-            // moved into the dataset that has no entry must not stay as an unindexed file that blocks the retry
+            // moved into the dataset that has no entry must not stay as an unindexed file that blocks the retry,
+            // unless its index write may still commit
             foreach (var (i, m) in moved)
                 if (outcomes[i] == null && m.Entry == null)
                     DropUnindexed(ctx, m, ex);
+
+            if (!settled)
+                SettleReservation(ctx, moved, sizes, ex);
 
             // Every file not settled shares it
             for (var i = 0; i < parts.Count; i++)
@@ -159,17 +164,35 @@ public sealed class UploadCommitter
     // A file placed in the dataset that has no entry. An error that passes (the index is busy, its write did not
     // finish in time) takes the file back out, so the retry meets a free name and the file is not left unindexed, which
     // would be refused as a clash and counted as a replaced file by a share batch. Anything else is quarantined.
-    // A file whose index write is still running stays: taken out, the index would list it without its file once
-    // that write commits.
+    // A file whose index write may still commit stays: taken out, the index would list it without its file once
+    // that write commits (the reconciliation sweep indexes it when the write does not).
     private void DropUnindexed(UploadRequestContext ctx, MovedUploadPart moved, Exception error)
     {
-        if (error is IndexWritePendingException)
-            _logger.LogWarning(error, "'{Path}' in dataset '{OrgSlug}/{DsSlug}' is still being indexed: it stays",
+        if (OutcomeUnknown(error))
+            _logger.LogWarning(error, "'{Path}' in dataset '{OrgSlug}/{DsSlug}' may still be indexed: it stays",
                 moved.Part.Path, ctx.OrgSlug, ctx.DsSlug);
         else if (error is TransientException or DdbBusyException)
             _files.Withdraw(ctx, moved, error);
         else
             _files.Quarantine(ctx, moved.Part.Path, moved.LocalPath, error);
+    }
+
+    // Whether the index write of a file may still commit: a batch is writing it, or the wait for it was canceled
+    // without the queue saying what became of it
+    private static bool OutcomeUnknown(Exception? error) =>
+        error is IndexWritePendingException or OperationCanceledException;
+
+    // The reservation becomes the size of the files that stay in the dataset (indexed, or whose index write may
+    // still commit; a file without its own error shares the request's); with none it is released when the request ends
+    private static void SettleReservation(UploadRequestContext ctx, IEnumerable<(int Index, MovedUploadPart Part)> moved,
+        long[] sizes, Exception? requestError = null)
+    {
+        var staying = moved.Where(m => m.Part.Entry != null || OutcomeUnknown(m.Part.Error ?? requestError)).ToArray();
+        if (staying.Length == 0 || ctx.Reservation == null)
+            return;
+
+        ctx.Reservation.Resize(staying.Sum(m => sizes[m.Index]));
+        ctx.Reservation.Commit();
     }
 
     private async Task ReserveAsync(UploadRequestContext ctx, long bytes)

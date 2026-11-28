@@ -1,10 +1,10 @@
-using System.Data.Common;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
+using Registry.Common;
 using Registry.Ports;
 using Registry.Web.Models.Configuration;
 using Registry.Web.Services.Builds;
@@ -18,7 +18,9 @@ namespace Registry.Web.Services.Objects;
 /// What an entry command changes beyond its entries, at once (uploads coalesce their caches,
 /// <see cref="IDatasetChangeCoalescer"/>): the dataset thumbnail when a thumbnail candidate changed, the dataset's OGC
 /// documents, for entries that arrive, the pending builds that waited for them, and, for entries that leave, the waits
-/// for files of their builds (<see cref="IBuildNotificationRecorder.EntriesLeftAsync"/>).
+/// for files of their builds (<see cref="IBuildNotificationRecorder.EntriesLeftAsync"/>). The entries have changed
+/// already when it is told: a notification that fails is logged, never the failure of the command that changed them
+/// (a client told that a completed move failed would retry it against a source that is gone).
 /// </summary>
 public sealed class EntryChangeNotifier
 {
@@ -61,22 +63,17 @@ public sealed class EntryChangeNotifier
     public async Task EntriesLeftAsync(string orgSlug, string dsSlug, IReadOnlyCollection<string> paths)
     {
         await EntriesChangedAsync(orgSlug, dsSlug, paths);
-        try
-        {
-            await _notifications.EntriesLeftAsync(orgSlug, dsSlug, paths, CancellationToken.None);
-        }
-        catch (DbException ex)
-        {
-            _logger.LogWarning(ex, "Cannot end the waits for files of {Count} entries that left {OrgSlug}/{DsSlug}",
-                paths.Count, orgSlug, dsSlug);
-        }
+        await BestEffort.RunAsync(() => _notifications.EntriesLeftAsync(orgSlug, dsSlug, paths, CancellationToken.None),
+            ex => _logger.LogWarning(ex, "Cannot end the waits for files of {Count} entries that left {OrgSlug}/{DsSlug}",
+                paths.Count, orgSlug, dsSlug));
     }
 
     /// <summary>Entries at <paramref name="paths"/> were added, changed or removed.</summary>
     public async Task EntriesChangedAsync(string orgSlug, string dsSlug, IEnumerable<string> paths)
     {
         if (paths.Any(p => DatasetThumbnails.IsCandidateFile(p, _thumbnailCandidates)))
-            await InvalidateDatasetThumbnailAsync(orgSlug, dsSlug);
+            await BestEffort.RunAsync(() => InvalidateDatasetThumbnailAsync(orgSlug, dsSlug), ex => _logger.LogWarning(
+                ex, "Cannot invalidate the dataset thumbnail of {OrgSlug}/{DsSlug}", orgSlug, dsSlug));
 
         await _ogcCatalog.InvalidateAsync(orgSlug, dsSlug);
     }

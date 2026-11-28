@@ -250,18 +250,27 @@ public sealed class DatasetIndexQueue : IDatasetIndexQueue, IDisposable
             upload?.End();
             var outcomes = requests.Select(GiveUp).ToArray();
 
-            // Canceled by the caller or by the shutdown: what was not applied never will be
-            if (!timeout.IsCancellationRequested || ct.IsCancellationRequested)
+            // Canceled by the caller: it waits for no outcome
+            if (ct.IsCancellationRequested)
                 throw;
 
-            // The deadline: each item says what became of it, so the caller knows which files the index will
-            // never list (safe to take out) and which a batch is still writing (to be left in place)
-            var late = new TransientException(
-                $"Index write for dataset '{dataset.OrgSlug}/{dataset.InternalRef}' did not complete within " +
-                $"{_opts.EnqueueTimeoutSeconds}s");
-            return outcomes.Select(o => o ?? new IndexOutcome(null, late)).ToArray();
+            // The deadline or the shutdown: each item says what became of it, so the caller knows which files the
+            // index will never list (safe to take out) and which a batch is still writing (to be left in place)
+            var unapplied = timeout.IsCancellationRequested
+                ? new TransientException(
+                    $"Index write for dataset '{dataset.OrgSlug}/{dataset.InternalRef}' did not complete within " +
+                    $"{_opts.EnqueueTimeoutSeconds}s")
+                : ShuttingDown(dataset);
+            return outcomes.Select(o => o ?? new IndexOutcome(null, unapplied)).ToArray();
         }
     }
+
+    /// <summary>
+    /// The failure of a request the stopping queue never applies (it was never taken into a batch): a retry
+    /// reaches the next process.
+    /// </summary>
+    private static TransientException ShuttingDown(DatasetKey dataset) =>
+        new($"The index queue of dataset '{dataset.OrgSlug}/{dataset.InternalRef}' is shutting down; retry the request");
 
     /// <summary>
     /// What became of an item whose caller stopped waiting: its entry when a request of it was applied, the error
@@ -471,9 +480,10 @@ public sealed class DatasetIndexQueue : IDatasetIndexQueue, IDisposable
             }
         }
 
-        // Shutdown: fail whatever is left so callers do not hang forever.
+        // Shutdown: fail whatever is left so callers do not hang forever. No batch took these: they are never
+        // applied, and the caller may take their files out
         while (reader.TryRead(out var leftover))
-            leftover.Tcs.TrySetException(new OperationCanceledException("Index queue is shutting down"));
+            leftover.Tcs.TrySetException(ShuttingDown(lane.Key));
     }
 
     /// <summary>

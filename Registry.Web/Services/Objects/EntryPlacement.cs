@@ -25,6 +25,9 @@ internal sealed class EntryPlacement(IFileSystem fs, ILogger logger)
     private bool _replaced;
     private bool _indexed;
 
+    /// <summary>What the copy holds, read from the temporary copy before it is promoted (set by <see cref="Place"/>).</summary>
+    public CopiedTree? Copied { get; private set; }
+
     /// <summary>
     /// Copies <paramref name="sourceLocalPath"/> to <paramref name="destPath"/> of <paramref name="destDdb"/> and
     /// promotes it, after moving <paramref name="replaced"/> (the entry the destination holds, when the request
@@ -48,6 +51,7 @@ internal sealed class EntryPlacement(IFileSystem fs, ILogger logger)
         logger.LogInformation("Copying '{Source}' -> '{Temp}'", sourceLocalPath, _tempPath);
         _tempWritten = true;
         fs.CopyEntry(sourceLocalPath, _tempPath, isFolder);
+        Copied = CopiedTree.Read(fs, _tempPath, isFolder);
 
         if (replaced != null)
         {

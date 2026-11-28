@@ -94,8 +94,8 @@ public class EntryTransferConcurrencyTests
         return ddb;
     }
 
-    // What one request has: its own context and services
-    private async Task TransferAsync(bool overwrite, bool keepSource, string path)
+    // What one request has: its own context and services; afterCopy runs once the copy is placed and indexed
+    private async Task TransferAsync(bool overwrite, bool keepSource, string path, Action? afterCopy = null)
     {
         await using var context = _db.NewContext();
         var auth = new Mock<IAuthManager>();
@@ -106,7 +106,7 @@ public class EntryTransferConcurrencyTests
             .WithDatasets(_datasets.Object)
             .WithAuthManager(auth.Object)
             .WithDdbWrapper(_wrapper)
-            .WithBuildArtifactResolver(TestPorts.Artifacts(_wrapper))
+            .WithBuildArtifactResolver(new AfterCopy(TestPorts.Artifacts(_wrapper), afterCopy))
             .Build().Transfers;
 
         await transfers.TransferAsync(Org, "src", path, Org, "dst", path, overwrite, keepSource);
@@ -214,6 +214,111 @@ public class EntryTransferConcurrencyTests
             Hash(File.ReadAllBytes(Path.Combine(_source.DatasetFolderPath, path))).ShouldBe(Hash(content), $"round {round}");
             _source.GetEntry(path).ShouldNotBeNull($"round {round}");
             LeftOvers().ShouldBeEmpty($"round {round}");
+        }
+    }
+
+    /// <summary>
+    /// A move of a folder while an upload lands in it: uploads do not wait for transfers, so a file can arrive in the
+    /// source folder after the copy was made, indexed before the source leaves the index or still on its way to it.
+    /// It is in neither the copy nor the destination: it stays in the source, with its index entry, and the rest of
+    /// the folder moves (red before: the move deleted the whole source folder and its index entries, so the file was
+    /// in neither dataset).
+    /// </summary>
+    [Test]
+    public async Task AMovedFolder_KeepsAFileUploadedIntoItAfterTheCopy([Values] bool indexedBeforeTheRemoval)
+    {
+        Directory.CreateDirectory(Path.Combine(_source.DatasetFolderPath, "dir", "sub"));
+        var moved = new[] { "dir/a.bin", "dir/sub/b.bin" };
+        foreach (var (path, i) in moved.Select((p, i) => (p, i)))
+            Add(_source, path, Content(5000 + i));
+        _source.AddRaw("dir");
+        var late = Content(5100);
+
+        await TransferAsync(overwrite: false, keepSource: false, "dir", afterCopy: () =>
+        {
+            File.WriteAllBytes(Path.Combine(_source.DatasetFolderPath, "dir", "sub", "late.bin"), late);
+            if (indexedBeforeTheRemoval)
+                _source.AddRaw("dir/sub/late.bin");
+        });
+        if (!indexedBeforeTheRemoval)
+            _source.AddRaw("dir/sub/late.bin");
+
+        var lateFile = Path.Combine(_source.DatasetFolderPath, "dir", "sub", "late.bin");
+        File.Exists(lateFile).ShouldBeTrue("the upload that arrived after the copy is gone from the source");
+        Hash(File.ReadAllBytes(lateFile)).ShouldBe(Hash(late));
+        _source.GetEntry("dir/sub/late.bin").ShouldNotBeNull();
+        _destination.GetEntry("dir/sub/late.bin").ShouldBeNull("the copy was made before the upload");
+
+        foreach (var (path, i) in moved.Select((p, i) => (p, i)))
+        {
+            Hash(File.ReadAllBytes(Path.Combine(_destination.DatasetFolderPath, path))).ShouldBe(Hash(Content(5000 + i)));
+            _destination.GetEntry(path).ShouldNotBeNull(path);
+            File.Exists(Path.Combine(_source.DatasetFolderPath, path)).ShouldBeFalse(path);
+            _source.GetEntry(path).ShouldBeNull(path);
+        }
+    }
+
+    /// <summary>
+    /// A file of a moved folder replaced by an upload after the copy was made: the destination has the copied
+    /// content, and the newer content stays in the source with its index entry (red before: the move deleted it).
+    /// </summary>
+    [Test]
+    public async Task AMovedFolder_KeepsAFileReplacedInItAfterTheCopy()
+    {
+        Directory.CreateDirectory(Path.Combine(_source.DatasetFolderPath, "dir"));
+        var original = Content(6000);
+        Add(_source, "dir/a.bin", original);
+        Add(_source, "dir/b.bin", Content(6001));
+        var newer = Content(6002)[..1000];
+
+        await TransferAsync(overwrite: false, keepSource: false, "dir", afterCopy: () =>
+            Add(_source, "dir/a.bin", newer));
+
+        Hash(File.ReadAllBytes(Path.Combine(_destination.DatasetFolderPath, "dir", "a.bin"))).ShouldBe(Hash(original));
+        Hash(File.ReadAllBytes(Path.Combine(_source.DatasetFolderPath, "dir", "a.bin"))).ShouldBe(Hash(newer));
+        _source.GetEntry("dir/a.bin").ShouldNotBeNull().Hash.ShouldBe(Hash(newer).ToLowerInvariant());
+        File.Exists(Path.Combine(_source.DatasetFolderPath, "dir", "b.bin")).ShouldBeFalse();
+        _source.GetEntry("dir/b.bin").ShouldBeNull();
+    }
+
+    /// <summary>A folder moved with nothing arriving meanwhile leaves no file, folder or index entry in the source.</summary>
+    [Test]
+    public async Task AMovedFolder_LeavesNothingInTheSource()
+    {
+        Directory.CreateDirectory(Path.Combine(_source.DatasetFolderPath, "dir", "sub", "empty"));
+        Add(_source, "dir/a.bin", Content(7000));
+        Add(_source, "dir/sub/b.bin", Content(7001));
+        _source.AddRaw("dir");
+
+        await TransferAsync(overwrite: false, keepSource: false, "dir");
+
+        Directory.Exists(Path.Combine(_source.DatasetFolderPath, "dir")).ShouldBeFalse();
+        _source.FindSummaries(EntryQuery.Under("dir")).ShouldBeEmpty();
+        _destination.GetEntry("dir/sub/b.bin").ShouldNotBeNull();
+        Directory.Exists(Path.Combine(_destination.DatasetFolderPath, "dir", "sub", "empty")).ShouldBeTrue();
+    }
+
+    // The real resolver, with a step of the test right after the transfer placed and indexed its copy
+    private sealed class AfterCopy(IBuildArtifactResolver inner, Action? afterCopy) : IBuildArtifactResolver
+    {
+        public bool IsBuildableType(EntryType type) => inner.IsBuildableType(type);
+        public bool HasThumbnail(EntryType type) => inner.HasThumbnail(type);
+        public IReadOnlyList<EntryTypeInfo> EntryTypes => inner.EntryTypes;
+        public EntryBuildArtifacts GetBuild(IDDB ddb, string entryPath) => inner.GetBuild(ddb, entryPath);
+        public IReadOnlyList<EntryBuildArtifacts> GetBuilds(IDDB ddb, IReadOnlyList<string> entryPaths) =>
+            inner.GetBuilds(ddb, entryPaths);
+        public string? GetRenderSource(IDDB ddb, Registry.Ports.DroneDB.Entry entry) => inner.GetRenderSource(ddb, entry);
+        public BuildDownload? GetDownload(EntryBuildArtifacts build, string? role = null) => inner.GetDownload(build, role);
+        public string? FindArtifactFile(IDDB ddb, string hash, string role, string? relativePath = null,
+            string? entryPath = null) => inner.FindArtifactFile(ddb, hash, role, relativePath, entryPath);
+        public long GetFileVersion(string localPath) => inner.GetFileVersion(localPath);
+        public ResolvedBuildFile? ResolveFile(IDDB ddb, string buildKey, string path) => inner.ResolveFile(ddb, buildKey, path);
+
+        public int CopyBuilds(IDDB source, IReadOnlyList<string> entryPaths, IDDB destination)
+        {
+            var copied = inner.CopyBuilds(source, entryPaths, destination);
+            afterCopy?.Invoke();
+            return copied;
         }
     }
 

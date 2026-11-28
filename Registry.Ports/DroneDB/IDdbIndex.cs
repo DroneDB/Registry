@@ -59,6 +59,12 @@ public interface IDdbIndex
     BatchAddResult AddRawBatchWithOptions(IReadOnlyList<AddItem> items, bool stopOnError = false);
 
     void Remove(string path);
+
+    /// <summary>
+    /// Removes <paramref name="paths"/> from the index in one transaction (a folder with everything under it, as
+    /// <see cref="Remove(string)"/>); every path must be indexed, else nothing is removed.
+    /// </summary>
+    void Remove(IReadOnlyList<string> paths);
     void Move(string source, string dest);
 
     string GetLocalPath(string path);

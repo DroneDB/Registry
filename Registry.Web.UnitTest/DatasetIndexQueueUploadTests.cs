@@ -245,6 +245,48 @@ public class DatasetIndexQueueUploadTests
         (await written.Task).ShouldBe("slow.jpg");
     }
 
+    /// <summary>
+    /// The queue shuts down while a native batch is writing a file: as at the deadline, its outcome is reported as
+    /// pending, so the upload leaves the file in place, and the batch still indexes it (red before: the shutdown threw
+    /// a cancellation that dropped every outcome, and the upload quarantined a file the batch then indexed).
+    /// </summary>
+    [Test]
+    public async Task AtTheShutdown_AFileABatchIsWriting_IsReportedPending_AndTheBatchStillIndexesIt()
+    {
+        var (queue, ddb) = CreateQueue(new IndexQueueSettings { BatchWindowMs = 5000, MaxBatchSize = 64 });
+        var writing = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        using var finish = new ManualResetEventSlim();
+        var written = new TaskCompletionSource<string>(TaskCreationOptions.RunContinuationsAsynchronously);
+        ddb.Setup(d => d.AddRawBatchWithOptions(It.IsAny<IReadOnlyList<AddItem>>(), It.IsAny<bool>()))
+            .Returns((IReadOnlyList<AddItem> items, bool _) =>
+            {
+                writing.TrySetResult();
+                finish.Wait(TimeSpan.FromMinutes(1));
+                written.TrySetResult(items.Single().Path);
+                return new BatchAddResult { Entries = [.. items.Select(i => MakeAdded(i.Path))] };
+            });
+        var key = new DatasetKey("org", Guid.NewGuid());
+
+        try
+        {
+            using var ticket = queue.BeginUpload(key);
+            var slow = queue.EnqueueAsync(key, [Hinted("slow.jpg")], ticket);
+            await writing.Task;
+
+            queue.Dispose();
+            var outcome = (await slow).Single();
+
+            outcome.Entry.ShouldBeNull();
+            outcome.Error.ShouldBeOfType<IndexWritePendingException>().Path.ShouldBe("slow.jpg");
+        }
+        finally
+        {
+            finish.Set();
+        }
+
+        (await written.Task).ShouldBe("slow.jpg");
+    }
+
     [Test]
     public async Task PathOverload_StillFailsOnTheFirstError()
     {

@@ -345,6 +345,74 @@ public class UploadManagerTests
             .Count(f => Path.GetFileName(f) == "slow.txt").ShouldBe(1, "neither withdrawn nor quarantined");
     }
 
+    /// <summary>
+    /// The wait for the index write was canceled without the queue saying what became of the file (a canceled
+    /// outcome, or the wait itself throwing): a batch may still list it, so the file stays where it is (red before:
+    /// it was quarantined, and the quarantine later deleted a file the index listed).
+    /// </summary>
+    [Test]
+    public async Task AnIndexWaitCanceledWithoutAnOutcome_LeavesTheFileInPlace([Values] bool thrown)
+    {
+        _queue.Setup(q => q.EnqueueAsync(It.IsAny<DatasetKey>(), It.IsAny<IReadOnlyList<AddItem>>(),
+                It.IsAny<UploadTicket?>(), It.IsAny<CancellationToken>()))
+            .Returns((DatasetKey _, IReadOnlyList<AddItem> items, UploadTicket? ticket, CancellationToken _) =>
+            {
+                ticket?.End();
+                if (thrown)
+                    throw new OperationCanceledException("Index queue is shutting down");
+                return Task.FromResult<IReadOnlyList<IndexOutcome>>([.. items.Select(_ =>
+                    new IndexOutcome(null, new OperationCanceledException("Index request canceled")))]);
+            });
+        var uploads = CreateManager();
+        using var ctx = await uploads.BeginAsync(Org, Ds);
+
+        var results = await uploads.CommitAsync(ctx, await StreamNew(uploads, ctx, "slow.txt"));
+
+        results.Single().Status.ShouldBe(StatusCodes.Status503ServiceUnavailable);
+        File.ReadAllText(Path.Combine(_root, "slow.txt")).ShouldBe("new");
+        Directory.EnumerateFiles(_root, "*", SearchOption.AllDirectories)
+            .Count(f => Path.GetFileName(f).EndsWith("slow.txt", StringComparison.Ordinal))
+            .ShouldBe(1, "neither withdrawn nor quarantined");
+    }
+
+    /// <summary>
+    /// A file whose index write is still running stays in the dataset, so its size stays in the owner's quota: the
+    /// next upload that does not fit beside it is refused (red before: the reservation of the pending file was
+    /// released and the next upload went over the limit).
+    /// </summary>
+    [Test]
+    public async Task AFileStillBeingIndexed_KeepsItsSizeInTheQuota()
+    {
+        _limit = 10;
+        var pending = true;
+        _queue.Setup(q => q.EnqueueAsync(It.IsAny<DatasetKey>(), It.IsAny<IReadOnlyList<AddItem>>(),
+                It.IsAny<UploadTicket?>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync((DatasetKey _, IReadOnlyList<AddItem> items, UploadTicket? ticket, CancellationToken _) =>
+            {
+                ticket?.End();
+                return items.Select(i => pending
+                    ? new IndexOutcome(null, new IndexWritePendingException(i.Path))
+                    : new IndexOutcome(new Entry { Path = i.Path, Hash = i.Hint?.Sha256, Type = EntryType.Generic }, null)).ToArray();
+            });
+        var uploads = CreateManager();
+
+        using (var ctx = await uploads.BeginAsync(Org, Ds))
+        {
+            var results = await uploads.CommitAsync(ctx, await StreamNew(uploads, ctx, "slow.txt", "123456"));
+            results.Single().Status.ShouldBe(StatusCodes.Status503ServiceUnavailable);
+        }
+
+        pending = false;
+        using (var ctx = await uploads.BeginAsync(Org, Ds))
+        {
+            var results = await uploads.CommitAsync(ctx, await StreamNew(uploads, ctx, "next.txt", "123456"));
+            results.Single().Status.ShouldBe(StatusCodes.Status507InsufficientStorage);
+        }
+
+        File.Exists(Path.Combine(_root, "slow.txt")).ShouldBeTrue();
+        File.Exists(Path.Combine(_root, "next.txt")).ShouldBeFalse();
+    }
+
     [Test]
     public async Task HashComputedWhileStreaming_IsTheIndexHint()
     {

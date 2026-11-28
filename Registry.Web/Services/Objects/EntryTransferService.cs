@@ -4,7 +4,6 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
-using Registry.Common;
 using Registry.Ports;
 using Registry.Ports.DroneDB;
 using Registry.Web.Exceptions;
@@ -100,6 +99,7 @@ public sealed class EntryTransferService : IEntryTransferService
             throw new BadRequestException("Cannot transfer a DroneDB file");
 
         var placement = new EntryPlacement(_fs, _logger);
+        MovedSource? movedSource = null;
 
         try
         {
@@ -121,12 +121,14 @@ public sealed class EntryTransferService : IEntryTransferService
             _logger.LogInformation("Copied {Count} build(s) of {Files} file(s) to the destination", copiedBuilds,
                 files.Length);
 
-            // Move semantics: the source index entry goes last; once it is gone the destination is the only copy
-            // the datasets list, so nothing after this point undoes the destination
+            // Move semantics: the source index entries go last; once they are gone the destination is the only
+            // copy the datasets list, so nothing after this point undoes the destination. Only what the copy holds
+            // goes: a file uploaded into the source since the copy was made stays there
             if (!keepSource)
             {
                 _logger.LogInformation("Removing source '{SourcePath}'", sourcePath);
-                RemoveSource(sourceDdb, sourcePath);
+                movedSource = new MovedSource(sourceDdb, sourcePath, isFolder, placement.Copied!, _fs, _logger);
+                movedSource.RemoveFromIndex();
             }
 
             // The destination holds the entry and the source does not: the replaced entry is not needed any more
@@ -139,8 +141,9 @@ public sealed class EntryTransferService : IEntryTransferService
             throw;
         }
 
-        if (!keepSource)
-            RemoveSourceFiles(sourceDdb, sourcePath, isFolder);
+        // The files of the moved source, which the index no longer lists: a failure is logged and leaves the
+        // file for the reconciliation, never a rollback that would lose the files already deleted
+        movedSource?.RemoveFiles();
 
         // After the commit: what the datasets tell their watchers is not a reason to undo the transfer
         if (!keepSource)
@@ -204,6 +207,7 @@ public sealed class EntryTransferService : IEntryTransferService
         await _writePolicy.EnsureAllowedAsync(access.Dataset.Organization?.OwnerId, dest, isFolder, storageDelta);
 
         var placement = new EntryPlacement(_fs, _logger);
+        Entry copiedEntry;
 
         try
         {
@@ -215,19 +219,11 @@ public sealed class EntryTransferService : IEntryTransferService
             placement.BeginIndexing();
             CopiedEntries.Index(ddb, sourceEntry, ddb, dest, _fs);
 
-            var copiedEntry = ddb.GetEntry(dest)
-                              ?? throw new DdbException($"Cannot find destination '{dest}' after copy, something wrong with ddb");
+            copiedEntry = ddb.GetEntry(dest)
+                          ?? throw new DdbException($"Cannot find destination '{dest}' after copy, something wrong with ddb");
 
             // Commit: the previous destination is not needed any more (the new one is in place)
             placement.Commit();
-
-            // Builds are named by content hash: the copy's content is the source's, its build serves both
-
-            // The copy may be what pending builds waited for (a companion copied under its expected name)
-            await _changes.EntriesArrivedAsync(access, orgSlug, dsSlug, [dest]);
-
-            _logger.LogInformation("Copy OK");
-            return copiedEntry.ToDto();
         }
         catch (Exception ex)
         {
@@ -235,37 +231,20 @@ public sealed class EntryTransferService : IEntryTransferService
             placement.Rollback();
             throw;
         }
+
+        // Builds are named by content hash: the copy's content is the source's, its build serves both
+
+        // After the commit, never undone by what follows: the copy may be what pending builds waited for (a
+        // companion copied under its expected name)
+        await _changes.EntriesArrivedAsync(access, orgSlug, dsSlug, [dest]);
+
+        _logger.LogInformation("Copy OK");
+        return copiedEntry.ToDto();
     }
 
     /// <summary>The key of a dataset in the lock of the transfers.</summary>
     private static string LockKey(string orgSlug, string dsSlug) =>
         (orgSlug + "/" + dsSlug).ToLowerInvariant();
-
-    /// <summary>
-    /// Forgets the source in its index. A source that is gone (another request moved or deleted it since the
-    /// checks) is a <see cref="NotFoundException"/>: the transfer is undone and answers 404, not a 500.
-    /// </summary>
-    private static void RemoveSource(IDDB ddb, string path)
-    {
-        try
-        {
-            ddb.Remove(path);
-        }
-        catch (DdbException) when (ddb.GetEntry(path) is null)
-        {
-            throw new NotFoundException("Cannot find source entry: '" + path + "'");
-        }
-    }
-
-    /// <summary>
-    /// Deletes the files of a moved source, which the index no longer lists. A file that cannot be deleted (locked,
-    /// read-only) is left on disk and logged: the destination is whole and indexed, and undoing it would lose the
-    /// files already deleted here. The reconciliation sweep finds what is left as unindexed files.
-    /// </summary>
-    private void RemoveSourceFiles(IDDB ddb, string path, bool isFolder) =>
-        BestEffort.Run(() => _fs.RemoveEntry(ddb.GetLocalPath(path), isFolder), ex => _logger.LogWarning(ex,
-            "The transfer of '{SourcePath}' is complete, but its files could not all be deleted from the source dataset: what is left stays unindexed on disk",
-            path));
 
     // The files of an entry: the entry itself, or every file under a folder
     private static string[] FilesOf(IDDB ddb, Entry entry, string path) =>

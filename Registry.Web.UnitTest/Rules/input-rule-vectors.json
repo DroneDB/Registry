@@ -1,5 +1,5 @@
 {
-  "description": "Test cases of the input rules that GET /sys/features publishes (FR-XC-12, D-014). The Registry runs them against its own checks and the published patterns (InputRulesTests, SlugRulesTests); the Hub keeps a copy and runs it against libs/nameRules.js and libs/slug.js. 'server' is the Registry's answer; 'precheck' is what a client answers with the published rule (pattern, reserved names). For slugs and Latin names both always agree.",
+  "description": "Test cases of the input rules that GET /sys/features publishes. The Registry runs them against its own checks and the published patterns (InputRulesTests, SlugRulesTests); the Hub keeps a copy and runs it against libs/nameRules.js and libs/slug.js. 'server' is the Registry's answer; 'precheck' is what a client answers with the published rule (pattern, reserved names). For slugs and Latin names both always agree.",
   "slug": {
     "accept": ["ab", "a0", "00", "a-", "a_", "my-org_1", "a-b-c", "survey-team", "0-"],
     "reject": ["", "o", "0", "-", "_", "-ab", "_ab", "Ab", "AB", "a b", "a/b", "a--b", "ab--", "a.b", "é1", "ab ", " ab"]
@@ -138,7 +138,7 @@
     "reject": ["", "   ", "Москва", "!!!@@@###", "東京", "Ωμέγα", "ｆｕｌｌ", "---", "__"]
   },
   "toSlug": [
-    { "name": "Ørsted Café Ü", "slug": "orsted-cafe-u", "note": "NFD drops the marks, ø is transliterated (FR-ORG-05)" },
+    { "name": "Ørsted Café Ü", "slug": "orsted-cafe-u", "note": "NFD drops the marks, ø is transliterated" },
     { "name": "Équipe Été", "slug": "equipe-ete" },
     { "name": "Straße", "slug": "strasse" },
     { "name": "Łódź Æble", "slug": "lodz-aeble" },
@@ -146,13 +146,13 @@
     { "name": "  Brighton   Beach  ", "slug": "brighton-beach", "note": "a run of anything else is one dash, none at the ends" },
     { "name": "Survey Team", "slug": "survey-team" },
     { "name": "a--b", "slug": "a-b" },
-    { "name": "ab--", "slug": "ab", "note": "never ends with a dash (FR-ORG-14)" },
+    { "name": "ab--", "slug": "ab", "note": "never ends with a dash" },
     { "name": "ab_-", "slug": "ab" },
     { "name": "_ab", "slug": "0_ab", "note": "the first character is a letter or a digit" },
     { "name": "-ab", "slug": "0-ab" },
     { "name": "a", "slug": "a0", "note": "padded to the minimum length" },
     { "name": "7", "slug": "70" },
-    { "name": "!!!", "slug": "00", "note": "the internal fallback: a request whose name and slug have no Latin letter or digit is refused (D-035)" },
+    { "name": "!!!", "slug": "00", "note": "the internal fallback: a request whose name and slug have no Latin letter or digit is refused" },
     { "name": "Москва", "slug": "00" }
   ]
 }
