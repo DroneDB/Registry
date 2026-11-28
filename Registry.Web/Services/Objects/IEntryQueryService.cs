@@ -14,9 +14,12 @@ public interface IEntryQueryService
     Task<IEnumerable<EntryDto>> ListAsync(string orgSlug, string dsSlug, string? path = null, bool recursive = false,
         EntryType? type = null, CancellationToken ct = default);
 
-    /// <summary>The entries whose name matches <paramref name="query"/> (file system wildcards).</summary>
+    /// <summary>
+    /// The entries whose name matches <paramref name="query"/> (file system wildcards); with
+    /// <paramref name="limit"/>, the first ones of that answer: the others are not converted, annotated or returned.
+    /// </summary>
     Task<IEnumerable<EntryDto>> SearchAsync(string orgSlug, string dsSlug, string? query = null, string? path = null,
-        bool recursive = true, EntryType? type = null, CancellationToken ct = default);
+        bool recursive = true, EntryType? type = null, int? limit = null, CancellationToken ct = default);
 
     /// <summary>The file at <paramref name="path"/> with its local path and media type.</summary>
     Task<StorageEntryDto> GetAsync(string orgSlug, string dsSlug, string? path, CancellationToken ct = default);

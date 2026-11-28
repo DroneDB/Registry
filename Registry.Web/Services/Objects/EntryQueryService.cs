@@ -57,7 +57,8 @@ public sealed class EntryQueryService : IEntryQueryService
     }
 
     public async Task<IEnumerable<EntryDto>> SearchAsync(string orgSlug, string dsSlug, string? query = null,
-        string? path = null, bool recursive = true, EntryType? type = null, CancellationToken ct = default)
+        string? path = null, bool recursive = true, EntryType? type = null, int? limit = null,
+        CancellationToken ct = default)
     {
         var ddb = (await _access.ResolveAsync(orgSlug, dsSlug, AccessType.Read, ct: ct)).Ddb;
 
@@ -69,10 +70,13 @@ public sealed class EntryQueryService : IEntryQueryService
         // letters and has no escapes, so other queries are matched in managed code only.
         var entities = ddb.Find(new EntryQuery(path, recursive, NativeNamePattern(query), TypesOf(type)));
 
-        var files = (from entry in entities
+        // The libddb call has no count of its own: the limit stops the (lazy) check and conversion at the
+        // first matches, so that the rest is never converted, annotated or serialized
+        var matches = from entry in entities
             let name = Path.GetFileName(entry.Path)
             where FileSystemName.MatchesSimpleExpression(query, name)
-            select entry.ToDto()).ToArray();
+            select entry;
+        var files = (limit is { } max ? matches.Take(max) : matches).Select(entry => entry.ToDto()).ToArray();
 
         await _buildStatus.AnnotateAsync(orgSlug, dsSlug, ddb, files);
 

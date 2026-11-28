@@ -238,6 +238,8 @@ public class ObjectsController : ControllerBaseEx
     /// <param name="path">The path to search in.</param>
     /// <param name="recursive">Whether to search recursively.</param>
     /// <param name="type">Optional filter by entry type.</param>
+    /// <param name="limit">Optional form field: the most entries returned (a whole number of 1 or more), the first ones in
+    /// the order of the answer without it; absent, every match. 0, a negative or a non-numeric value is a 400.</param>
     /// <returns>A list of matching entries.</returns>
     [HttpPost("search", Name = nameof(ObjectsController) + "." + nameof(Search))]
     [ProducesResponseType(StatusCodes.Status200OK)]
@@ -250,9 +252,13 @@ public class ObjectsController : ControllerBaseEx
         [FromForm] string? query,
         [FromForm] string? path,
         [FromForm] bool recursive = true,
-        [FromForm] EntryType? type = null, CancellationToken ct = default)
+        [FromForm] EntryType? type = null,
+        [FromForm] int? limit = null, CancellationToken ct = default)
     {
-        var res = await _queries.SearchAsync(orgSlug, dsSlug, query, path, recursive, type, ct: ct);
+        if (limit is < 1)
+            throw new BadRequestException("limit must be a whole number of 1 or more");
+
+        var res = await _queries.SearchAsync(orgSlug, dsSlug, query, path, recursive, type, limit, ct);
         return Answer(res);
     }
 
